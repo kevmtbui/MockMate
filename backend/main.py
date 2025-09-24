@@ -1,7 +1,16 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import interview
 
-app = FastAPI()
+app = FastAPI(title="MockMate API")
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello from FastAPI!"}
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # change to frontend URL in production
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# Include router
+app.include_router(interview.router)
