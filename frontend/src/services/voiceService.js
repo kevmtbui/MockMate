@@ -54,49 +54,75 @@ export class VoiceService {
     try {
       // Use Web Speech Recognition API (browser-native, free)
       if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
-        throw new Error('Speech recognition not supported in this browser');
+        throw new Error('Speech recognition not supported in this browser. Please use Chrome, Edge, or Safari.');
       }
       
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
       
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
       
-      return new Promise((resolve, reject) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
+      let finalTranscript = '';
+      let interimTranscript = '';
+      
+      console.log('Starting speech recognition...');
+      
+      recognition.onstart = () => {
+        console.log('Speech recognition started');
+        window.dispatchEvent(new CustomEvent('speechStarted'));
+      };
+      
+      recognition.onresult = (event) => {
+        console.log('Speech result received:', event.results);
         
-        recognition.onresult = (event) => {
-          finalTranscript = '';
-          interimTranscript = '';
-          
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              finalTranscript += transcript;
-            } else {
-              interimTranscript += transcript;
-            }
-          }
-        };
+        finalTranscript = '';
+        interimTranscript = '';
         
-        recognition.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
-          if (event.error === 'no-speech' || event.error === 'audio-capture') {
-            // These are common errors, don't reject
-            resolve({ final: finalTranscript, interim: interimTranscript });
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
           } else {
-            reject(new Error(`Speech recognition error: ${event.error}`));
+            interimTranscript += transcript;
           }
-        };
+        }
         
-        recognition.onend = () => {
-          resolve({ final: finalTranscript, interim: interimTranscript });
-        };
+        console.log('Final:', finalTranscript, 'Interim:', interimTranscript);
         
-        recognition.start();
-      });
+        // Trigger custom event for real-time updates
+        window.dispatchEvent(new CustomEvent('speechResult', {
+          detail: { final: finalTranscript, interim: interimTranscript }
+        }));
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        window.dispatchEvent(new CustomEvent('speechError', {
+          detail: { error: event.error }
+        }));
+      };
+      
+      recognition.onend = () => {
+        console.log('Speech recognition ended');
+        window.dispatchEvent(new CustomEvent('speechEnded', {
+          detail: { final: finalTranscript, interim: interimTranscript }
+        }));
+      };
+      
+      recognition.start();
+      
+      // Return the recognition object so it can be stopped manually
+      return {
+        recognition,
+        stop: () => {
+          console.log('Stopping speech recognition...');
+          recognition.stop();
+          return { final: finalTranscript, interim: interimTranscript };
+        }
+      };
     } catch (error) {
       console.error('Speech-to-text error:', error);
       throw error;

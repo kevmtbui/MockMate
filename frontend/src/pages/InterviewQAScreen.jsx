@@ -21,6 +21,9 @@ export default function InterviewQAScreen() {
   const [transcript, setTranscript] = useState("");
   const [recordingSession, setRecordingSession] = useState(null);
   const [hasPlayedCurrentQuestion, setHasPlayedCurrentQuestion] = useState(false);
+  const [answeringTimeLeft, setAnsweringTimeLeft] = useState(180); // 3 minutes in seconds
+  const [isAnsweringTimerRunning, setIsAnsweringTimerRunning] = useState(false);
+  const [enableMicrophone, setEnableMicrophone] = useState(location.state?.enableMicrophone || false);
   const hasGeneratedQuestions = useRef(false);
 
   // Generate questions using AI API
@@ -131,21 +134,99 @@ export default function InterviewQAScreen() {
   };
 
   const startRecording = async () => {
-    if (!voiceMode) return;
+    if (!enableMicrophone) {
+      console.log('Microphone not enabled');
+      return;
+    }
+    
+    // Check browser compatibility first
+    if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+    
+    console.log('Starting recording...');
     
     try {
-      setIsRecording(true);
-      // Use the new speech recognition directly
-      const session = await VoiceService.speechToText();
-      setRecordingSession({
-        stop: async () => {
-          setIsRecording(false);
-          return session.final || session.interim || '';
+      // Request microphone permission first
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log('Microphone permission granted');
+        } catch (permissionError) {
+          console.error('Microphone permission denied:', permissionError);
+          alert('Microphone permission is required for speech recognition. Please allow microphone access and try again.');
+          return;
         }
-      });
+      }
+      
+      setIsRecording(true);
+      setTranscript(""); // Clear previous transcript
+      
+      // Use the new speech recognition with real-time updates
+      const session = await VoiceService.speechToText();
+      setRecordingSession(session);
+      
+      // Listen for real-time speech results
+      const handleSpeechResult = (event) => {
+        console.log('Speech result event:', event.detail);
+        const { final, interim } = event.detail;
+        if (interim) {
+          // Show interim results in the response box
+          setResponse(prev => {
+            // Remove any previous interim text and add new interim text
+            const baseText = prev.replace(/\s*\[interim:.*?\]\s*$/, '');
+            return baseText + (baseText ? " " : "") + `[interim: ${interim}]`;
+          });
+        } else if (final) {
+          // Replace interim text with final text
+          setResponse(prev => {
+            const baseText = prev.replace(/\s*\[interim:.*?\]\s*$/, '');
+            const newText = final.trim();
+            // Check if the final text is already at the end of current response
+            if (baseText.endsWith(newText)) {
+              return baseText; // Don't add if already there
+            }
+            return baseText + (baseText ? " " : "") + final;
+          });
+        }
+      };
+      
+      const handleSpeechError = (event) => {
+        console.error('Speech recognition error:', event.detail.error);
+        alert(`Speech recognition error: ${event.detail.error}`);
+        setIsRecording(false);
+        setRecordingSession(null);
+      };
+      
+      const handleSpeechStarted = () => {
+        console.log('Speech recognition started successfully');
+      };
+      
+      const handleSpeechEnded = (event) => {
+        console.log('Speech recognition ended:', event.detail);
+        setIsRecording(false);
+        setRecordingSession(null);
+      };
+      
+      window.addEventListener('speechResult', handleSpeechResult);
+      window.addEventListener('speechError', handleSpeechError);
+      window.addEventListener('speechStarted', handleSpeechStarted);
+      window.addEventListener('speechEnded', handleSpeechEnded);
+      
+      // Store cleanup function
+      session.cleanup = () => {
+        window.removeEventListener('speechResult', handleSpeechResult);
+        window.removeEventListener('speechError', handleSpeechError);
+        window.removeEventListener('speechStarted', handleSpeechStarted);
+        window.removeEventListener('speechEnded', handleSpeechEnded);
+      };
+      
     } catch (error) {
       console.error('Error starting recording:', error);
+      alert(`Error starting recording: ${error.message}`);
       setIsRecording(false);
+      setRecordingSession(null);
     }
   };
 
@@ -153,10 +234,27 @@ export default function InterviewQAScreen() {
     if (!recordingSession) return;
     
     try {
-      const result = await recordingSession.stop();
-      const transcript = typeof result === 'string' ? result : (result.final || result.interim || '');
-      setTranscript(transcript);
-      setResponse(prev => prev + (prev ? " " : "") + transcript);
+      const result = recordingSession.stop();
+      const transcript = result.final || result.interim || '';
+      
+      if (transcript) {
+        // Clean up any interim text and add final transcript
+        setResponse(prev => {
+          const baseText = prev.replace(/\s*\[interim:.*?\]\s*$/, '');
+          const newText = transcript.trim();
+          // Check if the transcript is already at the end of current response
+          if (baseText.endsWith(newText)) {
+            return baseText; // Don't add if already there
+          }
+          return baseText + (baseText ? " " : "") + transcript;
+        });
+      }
+      
+      // Clean up event listeners
+      if (recordingSession.cleanup) {
+        recordingSession.cleanup();
+      }
+      
       setIsRecording(false);
       setRecordingSession(null);
     } catch (error) {
@@ -173,30 +271,54 @@ export default function InterviewQAScreen() {
   useEffect(() => {
     // Save settings to localStorage for retry functionality
     if (settings && Object.keys(settings).length > 0) {
-      localStorage.setItem('interviewSettings', JSON.stringify(settings));
+      const settingsWithMicrophone = { ...settings, enableMicrophone };
+      localStorage.setItem('interviewSettings', JSON.stringify(settingsWithMicrophone));
     }
     
     if (!hasGeneratedQuestions.current) {
       hasGeneratedQuestions.current = true;
       generateQuestions();
     }
+    
+    // Cleanup function to remove event listeners when component unmounts
+    return () => {
+      if (recordingSession && recordingSession.cleanup) {
+        recordingSession.cleanup();
+      }
+    };
   }, []);
 
+  // Prep timer effect
   useEffect(() => {
     let interval = null;
     if (isTimerRunning && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft(timeLeft => timeLeft - 1);
       }, 1000);
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && isPrepTime) {
       setIsTimerRunning(false);
-      if (isPrepTime) {
-        setIsPrepTime(false);
-        setTimeLeft(300); // 5 minutes for answering (fixed duration)
-      }
+      setIsPrepTime(false);
+      // Start answering timer when prep time ends
+      setAnsweringTimeLeft(180); // Reset to 3 minutes
+      setIsAnsweringTimerRunning(true);
     }
     return () => clearInterval(interval);
   }, [isTimerRunning, timeLeft, isPrepTime]);
+
+  // Answering timer effect
+  useEffect(() => {
+    let interval = null;
+    if (isAnsweringTimerRunning && answeringTimeLeft > 0) {
+      interval = setInterval(() => {
+        setAnsweringTimeLeft(answeringTimeLeft => answeringTimeLeft - 1);
+      }, 1000);
+    } else if (answeringTimeLeft === 0) {
+      setIsAnsweringTimerRunning(false);
+      // Auto-submit when answering time runs out
+      handleSkipOrNext();
+    }
+    return () => clearInterval(interval);
+  }, [isAnsweringTimerRunning, answeringTimeLeft]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -225,6 +347,8 @@ export default function InterviewQAScreen() {
     setIsPrepTime(true);
     setIsTimerRunning(true);
     setTimeLeft(parseInt(settings.prepTime) || 0);
+    setAnsweringTimeLeft(180); // Reset answering timer to 3 minutes
+    setIsAnsweringTimerRunning(false); // Stop answering timer during prep
     setHasPlayedCurrentQuestion(false); // Reset for first question
     
     // Play first question if voice mode is enabled
@@ -263,9 +387,15 @@ export default function InterviewQAScreen() {
       // Skip prep time, go directly to answering
       setIsPrepTime(false);
       setIsTimerRunning(false);
+      // Start answering timer
+      setAnsweringTimeLeft(180);
+      setIsAnsweringTimerRunning(true);
       // Note: Question was already played when interview started, no need to play again
     } else {
       // Next question or go to feedback
+      // Stop answering timer
+      setIsAnsweringTimerRunning(false);
+      
       // Save current response and submit to backend
       const currentQ = questions[currentQuestionIndex];
       const currentResponse = transcript || response;
@@ -308,12 +438,20 @@ export default function InterviewQAScreen() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <header className="w-full m-0 p-0">
-        <h1 
-          onClick={() => navigate("/")}
-          className="text-[80px] font-bold text-[#333333] font-inter text-center m-0 p-0 cursor-pointer hover:text-[#555555] transition-colors"
-        >
-          MockMate
-        </h1>
+        <div className="flex flex-col items-center">
+          <h1 
+            onClick={() => navigate("/")}
+            className="text-[clamp(4rem,10vw,6rem)] font-bold text-[#333333] font-inter text-center m-0 p-0 cursor-pointer hover:text-[#555555] transition-colors"
+          >
+            MockMate
+          </h1>
+          <button 
+            onClick={() => navigate("/contact")}
+            className="bg-[#D5D5D5] text-[#333333] rounded-[2rem] font-inter font-bold hover:bg-[#C5C5C5] transition-all duration-300 border-0 outline-none shadow-lg hover:shadow-xl whitespace-nowrap mt-4 px-6 py-2 text-[clamp(0.9rem,2.2vw,1.3rem)]"
+          >
+            Contact
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -325,7 +463,7 @@ export default function InterviewQAScreen() {
             <div className="text-center space-y-8">
               {isLoading ? (
                 <div className="space-y-4">
-                  <h2 className="text-[#333333] font-inter font-bold text-[35px]">
+                  <h2 className="text-[#333333] font-inter font-bold text-[clamp(1.5rem,4vw,2.5rem)]">
                     Generating Your Custom Interview...
                   </h2>
                   <div className="flex justify-center">
@@ -334,11 +472,11 @@ export default function InterviewQAScreen() {
                 </div>
               ) : (
                 <>
-              <h2 className="text-[#333333] font-inter font-bold text-[35px]">
+              <h2 className="text-[#333333] font-inter font-bold text-[clamp(1.5rem,4vw,2.5rem)]">
                     {isLoading ? "Preparing Your Interview..." : "Ready to Start Your Interview?"}
               </h2>
                   {!isLoading && (
-              <p className="text-[#333333] font-inter text-[25px]">
+              <p className="text-[#333333] font-inter text-[clamp(1.1rem,2.8vw,1.6rem)]">
                       You will have {formatPrepTime(parseInt(settings.prepTime) || 0)} to prepare for each question.
                     </p>
                   )}
@@ -365,11 +503,11 @@ export default function InterviewQAScreen() {
             <>
                   {/* Question Section */}
                   <div className="space-y-4">
-                    <h2 className="text-[#333333] font-inter font-bold text-[35px] border-b-4 border-blue-500 pb-2 inline-block">
+                    <h2 className="text-[#333333] font-inter font-bold text-[clamp(1.5rem,4vw,2.5rem)] border-b-4 border-blue-500 pb-2 inline-block">
                       Question {currentQuestionIndex + 1} of {totalQuestions}
                     </h2>
                     <div className="border-2 border-[#333333] rounded-xl p-8 h-[200px] flex items-center justify-center" style={{ width: '800px' }}>
-                      <p className="text-[#333333] font-inter text-[25px] text-center">
+                      <p className="text-[#333333] font-inter text-[clamp(1.1rem,2.8vw,1.6rem)] text-center">
                         {questions[currentQuestionIndex]?.question || questions[currentQuestionIndex]}
                       </p>
                     </div>
@@ -395,48 +533,18 @@ export default function InterviewQAScreen() {
 
               {/* Response Section */}
               <div className="space-y-4 mt-8">
-                <h2 className="text-[#333333] font-inter font-bold text-[35px]">
+                <h2 className="text-[#333333] font-inter font-bold text-[clamp(1.5rem,4vw,2.5rem)]">
                   Response
                 </h2>
                 
-                {/* Voice Recording Controls - Only show manual recording, not auto TTS */}
-                {false && !isPrepTime && (
-                  <div className="flex justify-center space-x-4">
-                    {!isRecording ? (
-                      <button
-                        onClick={startRecording}
-                        className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors flex items-center space-x-2"
-                      >
-                        <span>🎤</span>
-                        <span>Start Recording</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopRecording}
-                        className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors flex items-center space-x-2"
-                      >
-                        <span>⏹️</span>
-                        <span>Stop Recording</span>
-                      </button>
-                    )}
-                  </div>
-                )}
                 
-                {/* Transcript Display */}
-                {voiceMode && transcript && (
-                  <div className="border-2 border-green-300 rounded-xl p-4 bg-green-50">
-                    <p className="text-green-800 font-inter text-[20px]">
-                      <strong>Latest Transcript:</strong> {transcript}
-                    </p>
-                  </div>
-                )}
                 
                 <textarea
                   value={response}
                   onChange={(e) => setResponse(e.target.value)}
-                  className="border-2 border-[#333333] rounded-xl p-8 font-inter text-[#333333] text-[25px] focus:outline-none focus:ring-2 focus:ring-[#333333] resize-none"
+                  className="border-2 border-[#333333] rounded-xl p-8 font-inter text-[#333333] text-[clamp(1.1rem,2.8vw,1.6rem)] focus:outline-none focus:ring-2 focus:ring-[#333333] resize-none"
                   style={{ width: '800px', height: '300px' }}
-                  placeholder={voiceMode ? "Your transcribed response will appear here, or type manually..." : "Type your response here..."}
+                  placeholder={enableMicrophone ? "Click the microphone to record your answer, or type manually..." : "Type your response here..."}
                   disabled={isPrepTime}
                 />
               </div>
@@ -445,21 +553,76 @@ export default function InterviewQAScreen() {
               <div className="flex items-center justify-center space-x-8" style={{ minHeight: '80px' }}>
                 {isPrepTime ? (
                   <div className="flex items-center">
-                    <span className="text-[#333333] font-inter font-bold text-[35px] text-left whitespace-nowrap" style={{ width: '220px', minWidth: '220px' }}>
+                    <span className="text-[#333333] font-inter font-bold text-[clamp(1.5rem,4vw,2.5rem)] text-left whitespace-nowrap" style={{ width: '220px', minWidth: '220px' }}>
                       Prep Time
                     </span>
-                    <div className="text-[#333333] font-inter text-[35px] font-mono" style={{ marginLeft: '20px' }}>
+                    <div className="text-[#333333] font-inter text-[clamp(1.5rem,4vw,2.5rem)] font-mono" style={{ marginLeft: '20px' }}>
                       {formatTime(timeLeft)}
+                    </div>
+                  </div>
+                ) : isAnsweringTimerRunning ? (
+                  <div className="flex items-center">
+                    <span className="text-[#333333] font-inter font-bold text-[clamp(1.5rem,4vw,2.5rem)] text-left whitespace-nowrap" style={{ width: '220px', minWidth: '220px' }}>
+                      Time Limit
+                    </span>
+                    <div className="text-[#333333] font-inter text-[clamp(1.5rem,4vw,2.5rem)] font-mono" style={{ marginLeft: '20px' }}>
+                      {formatTime(answeringTimeLeft)}
                     </div>
                   </div>
                 ) : (
                   <div style={{ width: '220px', minWidth: '220px' }}></div>
                 )}
-                <div className={`w-16 h-16 ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-[#333333]'} rounded-full flex items-center justify-center`}>
-                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-                  </svg>
-                </div>
+                
+                {/* Microphone Recording Controls */}
+                {enableMicrophone && !isPrepTime && (
+                  <div className="flex items-center justify-end" style={{ width: '300px' }}>
+                    <div className="relative">
+                      {/* Microphone Icon with Glow Effect */}
+                      <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        className={`relative rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 ${
+                          isRecording 
+                            ? 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse' 
+                            : 'bg-gray-400 hover:bg-gray-500'
+                        }`}
+                        style={{
+                          width: '64px',
+                          height: '64px',
+                          boxShadow: isRecording ? '0 0 20px rgba(239, 68, 68, 0.8), 0 0 40px rgba(239, 68, 68, 0.4)' : 'none'
+                        }}
+                      >
+                        {/* Inner glow effect when recording */}
+                        {isRecording && (
+                          <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75"></div>
+                        )}
+                        
+                        {/* Microphone SVG Icon */}
+                        <svg 
+                          className={`text-white relative z-10 ${isRecording ? 'animate-pulse' : ''}`} 
+                          fill="currentColor" 
+                          viewBox="0 0 24 24"
+                          style={{ width: '32px', height: '32px' }}
+                        >
+                          <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                        </svg>
+                      </button>
+                      
+                      {/* Recording Status Text */}
+                      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+                        <span className={`text-sm font-medium ${isRecording ? 'text-red-500' : 'text-gray-500'}`}>
+                          {isRecording ? 'Recording...' : 'Click to Record'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Browser compatibility check */}
+                    {!(window.SpeechRecognition || window.webkitSpeechRecognition) && (
+                      <div className="text-red-600 text-sm ml-4">
+                        Speech recognition not supported. Please use Chrome, Edge, or Safari.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -472,7 +635,7 @@ export default function InterviewQAScreen() {
               <button
                 disabled
                 className="bg-[#D5D5D5] text-[#999999] rounded-[2rem] font-inter font-bold cursor-not-allowed transition-all duration-300 border-0 outline-none shadow-lg whitespace-nowrap pt-4"
-                style={{ padding: '10px 35px', fontSize: '32px' }}
+                className="px-8 py-4 text-[clamp(1.5rem,4vw,2.5rem)]"
               >
                 Generating Questions...
               </button>
@@ -480,7 +643,7 @@ export default function InterviewQAScreen() {
             <button
               onClick={startInterview}
               className="bg-[#D5D5D5] text-[#333333] rounded-[2rem] font-inter font-bold hover:bg-[#C5C5C5] transition-all duration-300 border-0 outline-none shadow-lg hover:shadow-xl whitespace-nowrap pt-4"
-              style={{ padding: '10px 35px', fontSize: '32px' }}
+              className="px-8 py-4 text-[clamp(1.5rem,4vw,2.5rem)]"
             >
               Start Interview
             </button>
@@ -488,7 +651,7 @@ export default function InterviewQAScreen() {
               <button
                 disabled
                 className="bg-[#D5D5D5] text-[#999999] rounded-[2rem] font-inter font-bold cursor-not-allowed transition-all duration-300 border-0 outline-none shadow-lg whitespace-nowrap pt-4"
-                style={{ padding: '10px 35px', fontSize: '32px' }}
+                className="px-8 py-4 text-[clamp(1.5rem,4vw,2.5rem)]"
               >
                 No Questions Available
               </button>
@@ -508,6 +671,7 @@ export default function InterviewQAScreen() {
             </button>
           )}
         </div>
+
       </main>
     </div>
   );

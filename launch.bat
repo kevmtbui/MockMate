@@ -29,25 +29,34 @@ if %errorlevel% neq 0 (
 
 REM Launch Backend (Python FastAPI)
 echo Starting Backend Server...
-start "MockMate Backend" cmd /k "cd /d %ROOT%backend && echo Activating virtual environment... && .\venv\Scripts\activate && echo Installing dependencies... && pip install fastapi uvicorn python-multipart && echo Starting FastAPI server... && python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+start "MockMate Backend" cmd /k "cd /d %ROOT%backend && echo Activating virtual environment... && .\venv\Scripts\activate && echo Installing dependencies... && pip install fastapi uvicorn python-multipart && echo Starting FastAPI server with network access... && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul
 
 REM Launch Frontend (React)
 echo Starting Frontend Server...
-start "MockMate Frontend" cmd /k "cd /d %ROOT%frontend && echo Installing dependencies... && npm install && echo Starting Vite dev server... && npm run dev"
+start "MockMate Frontend" cmd /k "cd /d %ROOT%frontend && echo Installing dependencies... && npm install && echo Starting Vite dev server with network access... && npm run dev -- --host 0.0.0.0"
 
 REM Wait a moment for frontend to start
 timeout /t 3 /nobreak >nul
 
 echo.
 echo ========================================
-echo Both servers are launching...
+echo Both servers are launching with network access...
 echo ========================================
+echo.
+echo LOCAL ACCESS:
 echo Frontend: http://localhost:5173
 echo Backend:  http://localhost:8000
 echo API Docs: http://localhost:8000/docs
+echo.
+echo NETWORK ACCESS (for other devices on your WiFi):
+echo Frontend: http://192.168.0.214:5173
+echo Backend:  http://192.168.0.214:8000
+echo API Docs: http://192.168.0.214:8000/docs
+echo.
+echo Share the network URL with others on your WiFi!
 echo.
 echo Press any key to close this window...
 pause >nul

@@ -41,6 +41,28 @@ class LocalAIService:
         - Questions should be realistic and commonly asked in interviews
         - Adjust complexity based on job level (e.g., intern questions vs senior-level questions)
         
+        IMPORTANT: For technical questions, focus on:
+        - Knowledge and understanding of concepts, tools, and methodologies
+        - Problem-solving approaches and decision-making processes
+        - Industry best practices and standards
+        - Troubleshooting and diagnostic thinking
+        - Process and workflow understanding
+        - Domain-specific knowledge that someone in this role should know
+        
+        DO NOT ask for:
+        - Writing code or pseudocode
+        - Programming exercises
+        - Live coding challenges
+        - Syntax-specific questions
+        
+        Instead ask about:
+        - How you would approach a problem
+        - What tools/technologies you would use and why
+        - What considerations you would make
+        - How you would troubleshoot issues
+        - What processes you would follow
+        - What you know about specific technologies/concepts
+        
         Return ONLY a JSON array with this exact format (no other text):
         [
             {{"id": 1, "question": "Question text here", "question_type": "{settings.interview_type}", "difficulty": "{settings.difficulty}"}},
@@ -112,10 +134,10 @@ class LocalAIService:
         fallback_questions = {
             "Technical": [
                 "Tell me about yourself and your technical background.",
-                "What programming languages are you most comfortable with?",
-                "Describe a challenging technical problem you solved recently.",
-                "How do you approach debugging complex issues?",
-                "What's your experience with version control and collaboration tools?"
+                "What technologies and tools are you most comfortable working with?",
+                "Describe a challenging technical problem you solved recently and how you approached it.",
+                "How do you approach debugging and troubleshooting complex issues?",
+                "What's your experience with version control and collaboration tools, and how do they fit into your workflow?"
             ],
             "Behavioral": [
                 "Tell me about a time when you had to work under pressure.",
@@ -194,11 +216,11 @@ class LocalAIService:
         
         {context}
         
-        Provide honest, realistic feedback that helps the candidate understand their strengths and areas for improvement. Be direct but fair in your assessment.
+        Provide honest, realistic feedback that helps the candidate understand their strengths and areas for improvement. Be direct but fair in your assessment. Recognize good answers with appropriate scores and constructive criticism for areas that need work.
         
         Provide feedback in the following JSON format (return ONLY the JSON, no other text):
         {{
-            "overall_score": 6,
+            "overall_score": 7,
             "strengths": [
                 {{"category": "strength", "title": "Good Communication", "description": "Clear and articulate responses with good structure", "suggestion": null}}
             ],
@@ -220,7 +242,12 @@ class LocalAIService:
         - Constructive suggestions for growth
         - Realistic assessment of interview readiness
         
-        Be honest but constructive in your evaluation.
+        Be honest but constructive in your evaluation. Give appropriate scores:
+        - 8-10: Excellent, comprehensive answers with strong examples
+        - 6-7: Good answers with minor gaps or areas for improvement
+        - 4-5: Adequate answers but lacking depth or specific examples
+        - 2-3: Poor answers with significant gaps or unclear responses
+        - 1: Inappropriate or nonsensical responses
         """
         
         try:
@@ -289,28 +316,28 @@ class LocalAIService:
             strengths=[
                 FeedbackItem(
                     category="strength",
-                    title="Interview Participation",
-                    description="You completed the interview process",
+                    title="Wasted Everyone's Time",
+                    description="You managed to waste both your time and the interviewer's time with completely nonsensical responses",
                     suggestion=None
                 )
             ],
             weaknesses=[
                 FeedbackItem(
                     category="weakness",
-                    title="Invalid Test Responses",
-                    description="The responses provided appear to be test data, nonsensical input (like 'asdasdasdasd'), or simply repeating the question back",
-                    suggestion="Please provide real, thoughtful answers to interview questions to receive meaningful feedback"
+                    title="COMPLETE FAILURE: Nonsensical Responses",
+                    description="Your responses are completely unacceptable - random characters like 'asdasdasdasd' or test data. This shows zero respect for the interview process and would result in immediate termination of any real interview.",
+                    suggestion="This is completely unprofessional. If you can't take an interview seriously, don't waste people's time. This behavior would get you blacklisted from any reputable company."
                 )
             ],
             improvements=[
                 FeedbackItem(
                     category="improvement",
-                    title="Provide Real Answers",
-                    description="To get helpful feedback, answer interview questions with genuine, relevant responses",
-                    suggestion="Practice answering questions with specific examples from your experience and knowledge"
+                    title="URGENT: Learn Basic Professionalism",
+                    description="You need to understand that interviews are serious professional interactions, not a joke. This level of disrespect is unacceptable.",
+                    suggestion="Grow up and learn to take professional opportunities seriously. This kind of behavior will destroy your career before it even starts."
                 )
             ],
-            summary="This appears to be a test run with invalid responses. To receive meaningful feedback, please answer the interview questions with real, thoughtful responses."
+            summary="This is a COMPLETE WASTE OF TIME. Your nonsensical responses show zero professionalism and would result in immediate rejection and potential blacklisting. Learn to take interviews seriously or don't apply for jobs."
         )
 
     @staticmethod

@@ -86,9 +86,20 @@ export default function UploadForm() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <header className="w-full m-0 p-0">
-        <h1 className="text-[80px] font-bold text-[#333333] font-inter text-center m-0 p-0">
-          MockMate
-        </h1>
+        <div className="flex flex-col items-center">
+          <h1 
+            onClick={() => navigate("/")}
+            className="text-[clamp(4rem,10vw,6rem)] font-bold text-[#333333] font-inter text-center m-0 p-0 cursor-pointer hover:text-[#555555] transition-colors"
+          >
+            MockMate
+          </h1>
+          <button 
+            onClick={() => navigate("/contact")}
+            className="bg-[#D5D5D5] text-[#333333] rounded-[2rem] font-inter font-bold hover:bg-[#C5C5C5] transition-all duration-300 border-0 outline-none shadow-lg hover:shadow-xl whitespace-nowrap mt-4 px-6 py-2 text-[clamp(0.9rem,2.2vw,1.3rem)]"
+          >
+            Contact
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -96,7 +107,7 @@ export default function UploadForm() {
         <div className="max-w-2xl mx-auto space-y-8">
           {/* Page Title */}
           <div className="space-y-4 text-center">
-            <h2 className="text-[4rem] md:text-[5rem] lg:text-[6rem] font-bold text-[#333333] font-inter leading-tight">
+            <h2 className="text-[clamp(2.5rem,6vw,4rem)] md:text-[clamp(3rem,8vw,5rem)] lg:text-[clamp(4rem,10vw,6rem)] font-bold text-[#333333] font-inter leading-tight">
               Upload Your Resume
             </h2>
           </div>
@@ -117,12 +128,12 @@ export default function UploadForm() {
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <p className="text-[#333333] font-inter text-[25px] py-4">
+              <p className="text-[#333333] font-inter text-[clamp(1.2rem,3vw,1.8rem)] py-4">
                 Drag & Drop or Browse Resume
               </p>
               {isExtracting ? (
                 <div className="space-y-2">
-                  <p className="text-[#333333] font-inter text-[20px]">
+                  <p className="text-[#333333] font-inter text-[clamp(1rem,2.5vw,1.5rem)]">
                     Extracting text from resume...
                   </p>
                   <div className="flex justify-center">
@@ -131,11 +142,11 @@ export default function UploadForm() {
                 </div>
               ) : selectedFile ? (
                 <div className="space-y-2">
-                  <p className="text-[#333333] font-inter text-[20px]">
+                  <p className="text-[#333333] font-inter text-[clamp(1rem,2.5vw,1.5rem)]">
                     Selected: {selectedFile.name}
                   </p>
                   {resumeText && (
-                    <div className="text-[#333333] font-inter text-[16px] bg-gray-100 p-3 rounded-lg max-h-32 overflow-y-auto">
+                    <div className="text-[#333333] font-inter text-[clamp(0.9rem,2.2vw,1.3rem)] bg-gray-100 p-3 rounded-lg max-h-32 overflow-y-auto">
                       <strong>Extracted text preview:</strong><br />
                       {resumeText.substring(0, 200)}...
                     </div>
@@ -147,39 +158,39 @@ export default function UploadForm() {
             {/* Job Information */}
             <div className="space-y-4">
               <div className="space-y-3">
-                <label className="block text-[#333333] font-inter font-bold text-[25px]">
+                <label className="block text-[#333333] font-inter font-bold text-[clamp(1.1rem,2.8vw,1.6rem)]">
                   Job Title
                 </label>
                 <input
                   type="text"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
-                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[20px] focus:outline-none focus:ring-2 focus:ring-[#333333]"
+                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[clamp(1rem,2.5vw,1.5rem)] focus:outline-none focus:ring-2 focus:ring-[#333333]"
                   placeholder="e.g., Software Engineer"
                 />
               </div>
 
               <div className="space-y-3">
-                <label className="block text-[#333333] font-inter font-bold text-[25px]">
+                <label className="block text-[#333333] font-inter font-bold text-[clamp(1.1rem,2.8vw,1.6rem)]">
                   Company Name
                 </label>
                 <input
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[20px] focus:outline-none focus:ring-2 focus:ring-[#333333]"
+                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[clamp(1rem,2.5vw,1.5rem)] focus:outline-none focus:ring-2 focus:ring-[#333333]"
                   placeholder="e.g., Google"
                 />
               </div>
 
               <div className="space-y-3">
-                <label className="block text-[#333333] font-inter font-bold text-[25px]">
+                <label className="block text-[#333333] font-inter font-bold text-[clamp(1.1rem,2.8vw,1.6rem)]">
                   Job Level
                 </label>
                 <select
                   value={jobLevel}
                   onChange={(e) => setJobLevel(e.target.value)}
-                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[20px] focus:outline-none focus:ring-2 focus:ring-[#333333] bg-white"
+                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[clamp(1rem,2.5vw,1.5rem)] focus:outline-none focus:ring-2 focus:ring-[#333333] bg-white"
                 >
                   <option value="Intern">Intern</option>
                   <option value="Entry">Entry Level</option>
@@ -191,13 +202,13 @@ export default function UploadForm() {
               </div>
 
               <div className="space-y-3">
-                <label className="block text-[#333333] font-inter font-bold text-[25px]">
+                <label className="block text-[#333333] font-inter font-bold text-[clamp(1.1rem,2.8vw,1.6rem)]">
                   Job Description
                 </label>
                 <textarea
                   value={jobDescription}
                   onChange={(e) => setJobDescription(e.target.value)}
-                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[20px] focus:outline-none focus:ring-2 focus:ring-[#333333] resize-none"
+                  className="w-full px-6 py-4 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[clamp(1rem,2.5vw,1.5rem)] focus:outline-none focus:ring-2 focus:ring-[#333333] resize-none"
                   rows="4"
                   placeholder="Paste the job description here..."
                 />
@@ -211,16 +222,16 @@ export default function UploadForm() {
           <button
             onClick={handleSubmit}
             disabled={!isFormValid()}
-            className={`rounded-[2rem] font-inter font-bold transition-all duration-300 border-0 outline-none shadow-lg whitespace-nowrap ${
+            className={`rounded-[2rem] font-inter font-bold transition-all duration-300 border-0 outline-none shadow-lg whitespace-nowrap px-8 py-4 text-[clamp(1.5rem,4vw,2.5rem)] ${
               isFormValid() 
                 ? 'bg-[#D5D5D5] text-[#333333] hover:bg-[#C5C5C5] hover:shadow-xl cursor-pointer' 
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
-            style={{ padding: '10px 35px', fontSize: '32px' }}
           >
             Continue
           </button>
         </div>
+
       </main>
     </div>
   );

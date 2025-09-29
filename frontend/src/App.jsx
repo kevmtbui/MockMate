@@ -4,6 +4,7 @@ import UploadForm from "./pages/UploadForm";
 import InterviewSetup from "./pages/InterviewSetup";
 import InterviewQAScreen from "./pages/InterviewQAScreen";
 import FeedbackScreen from "./pages/FeedbackScreen";
+import ContactPage from "./pages/ContactPage";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/setup" element={<InterviewSetup />} />
         <Route path="/interview" element={<InterviewQAScreen />} />
         <Route path="/feedback" element={<FeedbackScreen />} />
+        <Route path="/contact" element={<ContactPage />} />
       </Routes>
     </Router>
   );
