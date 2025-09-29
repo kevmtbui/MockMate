@@ -1,16 +1,19 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function InterviewSetup() {
   const navigate = useNavigate();
-  const [jobTitle, setJobTitle] = useState("");
-  const [interviewType, setInterviewType] = useState("Technical");
-  const [prepTime, setPrepTime] = useState(0);
-  const [jobDescription, setJobDescription] = useState("");
-  const [midInterviewTips, setMidInterviewTips] = useState(false);
+  const location = useLocation();
+  const uploadData = location.state || {};
+  
+  const [interviewType, setInterviewType] = useState("Mixed");
+  const [difficulty, setDifficulty] = useState("Moderate");
+  const [numberOfQuestions, setNumberOfQuestions] = useState(5);
+  const [prepTime, setPrepTime] = useState("30");
+  const [autoTTS, setAutoTTS] = useState(false);
 
   const isFormValid = () => {
-    return jobTitle.trim() !== "" && jobDescription.trim() !== "";
+    return true; // Always valid since we removed required fields
   };
 
   const handleSubmit = (e) => {
@@ -20,11 +23,17 @@ export default function InterviewSetup() {
     }
     navigate("/interview", { 
       state: { 
+        selectedFile: uploadData.selectedFile,
+        jobTitle: uploadData.jobTitle || "",
+        companyName: uploadData.companyName || "",
+        jobDescription: uploadData.jobDescription || "",
+        jobLevel: uploadData.jobLevel || "Entry",
+        resumeText: uploadData.resumeText || "",
         prepTime: parseInt(prepTime),
-        jobTitle: jobTitle,
         interviewType: interviewType,
-        jobDescription: jobDescription,
-        midInterviewTips: midInterviewTips
+        difficulty: difficulty,
+        numberOfQuestions: numberOfQuestions,
+        autoTTS: autoTTS,
       }
     });
   };
@@ -53,19 +62,6 @@ export default function InterviewSetup() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Job Title */}
-            <div className="space-y-3">
-              <label className="block text-[#333333] font-inter font-bold text-[35px]">
-                Job Title
-              </label>
-              <input
-                type="text"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-                className="w-full px-8 py-6 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[25px] focus:outline-none focus:ring-2 focus:ring-[#333333]"
-                placeholder="Enter job title"
-              />
-            </div>
 
             {/* Question Type */}
             <div className="space-y-3">
@@ -84,63 +80,84 @@ export default function InterviewSetup() {
               </select>
             </div>
 
+            {/* Difficulty */}
+            <div className="space-y-3">
+              <label className="block text-[#333333] font-inter font-bold text-[35px]">
+                Difficulty
+              </label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+                className="w-full px-8 py-6 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[25px] focus:outline-none focus:ring-2 focus:ring-[#333333] bg-white"
+              >
+                <option value="Easy">Easy</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Hard">Hard</option>
+              </select>
+            </div>
+
+            {/* Number of Questions */}
+            <div className="space-y-3">
+              <label className="block text-[#333333] font-inter font-bold text-[35px]">
+                Number of Questions
+              </label>
+              <select
+                value={numberOfQuestions}
+                onChange={(e) => setNumberOfQuestions(parseInt(e.target.value))}
+                className="w-full px-8 py-6 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[25px] focus:outline-none focus:ring-2 focus:ring-[#333333] bg-white"
+              >
+                <option value={3}>3 Questions</option>
+                <option value={5}>5 Questions</option>
+                <option value={7}>7 Questions</option>
+                <option value={10}>10 Questions</option>
+              </select>
+            </div>
+
             {/* Question Prep Time */}
             <div className="space-y-3">
               <label className="block text-[#333333] font-inter font-bold text-[35px]">
                 Question Prep Time
               </label>
-              <div className="flex items-center space-x-4">
-                <span className="text-[#333333] font-inter text-[35px]">0</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="60"
-                  value={prepTime}
-                  onChange={(e) => setPrepTime(e.target.value)}
-                  className="flex-1 h-4"
-                />
-                <span className="text-[#333333] font-inter text-[35px]">60</span>
-              </div>
-              <div className="text-center">
-                <span className="text-[#333333] font-inter font-bold text-[35px]">{prepTime} Seconds</span>
-              </div>
-            </div>
-
-            {/* Job Description */}
-            <div className="space-y-3 mb-12">
-              <label className="block text-[#333333] font-inter font-bold text-[35px]">
-                Job Description
-              </label>
-              <textarea
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                className="w-full px-8 py-6 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[25px] focus:outline-none focus:ring-2 focus:ring-[#333333] resize-none"
-                rows="4"
-                placeholder="Enter job description"
-              />
-            </div>
-
-            {/* Mid Interview Tips */}
-            <div className="flex items-center justify-between">
-              <label className="text-[#333333] font-inter font-bold text-[35px]">
-                Mid Interview Tips
-              </label>
-              <button
-                type="button"
-                onClick={() => setMidInterviewTips(!midInterviewTips)}
-                className={`relative inline-flex items-center rounded-full transition-colors ${
-                  midInterviewTips ? 'bg-[#333333]' : 'bg-[#D5D5D5]'
-                }`}
-                style={{ height: '40px', width: '40px' }}
+              <select
+                value={prepTime}
+                onChange={(e) => setPrepTime(e.target.value)}
+                className="w-full px-8 py-6 border-2 border-[#333333] rounded-xl font-inter text-[#333333] text-[25px] focus:outline-none focus:ring-2 focus:ring-[#333333] bg-white"
               >
-                <span
-                  className={`inline-block rounded-full bg-white transition-transform ${
-                    midInterviewTips ? 'translate-x-[66px]' : 'translate-x-1'
-                  }`}
-                  style={{ height: '64px', width: '64px' }}
-                />
-              </button>
+                <option value="0">No prep time</option>
+                <option value="30">30 seconds</option>
+                <option value="60">1 minute</option>
+                <option value="120">2 minutes</option>
+                <option value="180">3 minutes</option>
+              </select>
             </div>
+
+            {/* Auto Question TTS Toggle */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[#333333] font-inter font-bold text-[35px]">
+                  Auto Question TTS
+                </label>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setAutoTTS(!autoTTS);
+                  }}
+                  className={`relative inline-flex items-center rounded-full transition-colors ${
+                    autoTTS ? 'bg-[#333333]' : 'bg-[#D5D5D5]'
+                  }`}
+                  style={{ height: '40px', width: '80px' }}
+                >
+                  <span
+                    className={`inline-block rounded-full bg-white transition-transform ${
+                      autoTTS ? 'translate-x-[44px]' : 'translate-x-1'
+                    }`}
+                    style={{ height: '32px', width: '32px' }}
+                  />
+                </button>
+              </div>
+            </div>
+
           </form>
         </div>
 

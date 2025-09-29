@@ -1,11 +1,132 @@
-from typing import List
+from typing import List, Dict
 from datetime import datetime
 from models.answer import Answer
+from models.interview_settings import InterviewSettings, QuestionGenerationRequest, Question
+from models.feedback import InterviewFeedback, FeedbackItem
+from services.local_ai_service import LocalAIService
+from services.resume_service import ResumeService
 
 # Temporary storage
 user_answers: List[dict] = []
+interview_sessions: List[dict] = []
+current_session: dict = {}
 
-def generate_questions(interview_type: str = "Mixed"):
+def generate_questions(request: QuestionGenerationRequest) -> List[Question]:
+    """Generate AI-powered custom interview questions"""
+    try:
+        # Generate questions using local AI service
+        questions = LocalAIService.generate_questions(request.settings, request.resume_text)
+        
+        # Store current session for later use
+        global current_session
+        current_session = {
+            "settings": request.settings.dict(),
+            "questions": [q.dict() for q in questions],
+            "start_time": datetime.utcnow().isoformat(),
+            "answers": []
+        }
+        
+        return questions
+    except Exception as e:
+        print(f"Error in generate_questions: {e}")
+        # Fallback to basic questions
+        return LocalAIService._get_fallback_questions(request.settings)
+
+def submit_answer(answer: Answer):
+    """Submit an answer and store it in the current session"""
+    answer_data = answer.dict()
+    answer_data["timestamp"] = datetime.utcnow().isoformat()
+    
+    # Add to global answers (legacy)
+    user_answers.append(answer_data)
+    
+    # Add to current session
+    global current_session
+    if current_session:
+        current_session["answers"].append(answer_data)
+    
+    return {"message": "Answer submitted successfully.", "total_answers": len(user_answers)}
+
+def get_feedback() -> InterviewFeedback:
+    """Generate AI-powered feedback based on interview responses"""
+    global current_session
+    
+    if not current_session or not current_session.get("answers"):
+        # Return a specific feedback for no answers provided
+        return InterviewFeedback(
+            overall_score=2,
+            strengths=[
+                FeedbackItem(
+                    category="strength",
+                    title="Interview Participation",
+                    description="You completed the interview process, which shows commitment to the opportunity",
+                    suggestion=None
+                )
+            ],
+            weaknesses=[
+                FeedbackItem(
+                    category="weakness",
+                    title="No Responses Provided",
+                    description="You did not provide any answers to the interview questions, making it impossible to assess your qualifications",
+                    suggestion="Practice answering interview questions and ensure you provide responses during the actual interview"
+                )
+            ],
+            improvements=[
+                FeedbackItem(
+                    category="improvement",
+                    title="Complete Interview Responses",
+                    description="It's essential to answer all interview questions to demonstrate your knowledge and suitability for the role",
+                    suggestion="Prepare answers in advance and practice responding to common interview questions in your field"
+                )
+            ],
+            summary="No interview responses were provided, making it impossible to evaluate your qualifications. Please ensure you answer all questions in future interviews to give employers a chance to assess your fit for the role."
+        )
+    
+    try:
+        # Prepare questions and answers for feedback generation
+        questions_and_answers = []
+        questions = current_session.get("questions", [])
+        answers = current_session.get("answers", [])
+        
+        for i, answer in enumerate(answers):
+            question_text = questions[i]["question"] if i < len(questions) else "Unknown question"
+            questions_and_answers.append({
+                "question": question_text,
+                "answer": answer["answer"]
+            })
+        
+        # Create settings object for feedback generation
+        settings_data = current_session.get("settings", {})
+        settings = InterviewSettings(**settings_data)
+        
+        # Generate feedback using local AI
+        feedback = LocalAIService.generate_feedback(questions_and_answers, settings)
+        
+        # Store feedback in session
+        current_session["feedback"] = feedback.dict()
+        
+        return feedback
+        
+    except Exception as e:
+        print(f"Error generating feedback: {e}")
+        return LocalAIService._get_fallback_feedback()
+
+def get_all_answers():
+    return user_answers
+
+def get_current_session():
+    """Get the current interview session data"""
+    global current_session
+    return current_session
+
+def start_new_session():
+    """Start a new interview session"""
+    global current_session
+    current_session = {}
+    return {"message": "New session started"}
+
+def generate_questions_legacy(interview_type: str = "Mixed"):
+    """Legacy function for backward compatibility"""
     if interview_type == "Technical":
         questions = [
             {"id": 1, "question": "Tell me about yourself and your experience in software development."},
@@ -39,15 +160,3 @@ def generate_questions(interview_type: str = "Mixed"):
             {"id": 5, "question": "What are your strengths and weaknesses?"}
         ]
     return questions
-
-def submit_answer(answer: Answer):
-    answer_data = answer.dict()
-    answer_data["timestamp"] = datetime.utcnow().isoformat()
-    user_answers.append(answer_data)
-    return {"message": "Answer submitted successfully.", "total_answers": len(user_answers)}
-
-def get_feedback():
-    return {"feedback": "Feedback functionality coming soon!"}
-
-def get_all_answers():
-    return user_answers
