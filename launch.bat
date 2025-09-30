@@ -1,12 +1,12 @@
 @echo off
 REM ========================================
-REM Launches MockMate Frontend & Backend
+REM Launches MockMate Frontend & Backend (Network Access)
 REM ========================================
 
 REM Get current directory
 SET ROOT=%~dp0
 
-echo Starting MockMate servers...
+echo Starting MockMate servers with network access...
 echo.
 
 REM Check if Python is available
@@ -27,16 +27,21 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+REM Note: AI features now use Google Gemini API
+echo AI features powered by Google Gemini API
+echo Make sure to set your GEMINI_API_KEY environment variable
+echo.
+
 REM Launch Backend (Python FastAPI)
 echo Starting Backend Server...
-start "MockMate Backend" cmd /k "cd /d %ROOT%backend && echo Activating virtual environment... && .\venv\Scripts\activate && echo Installing dependencies... && pip install fastapi uvicorn python-multipart && echo Starting FastAPI server with network access... && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+start "MockMate Backend" cmd /k "cd /d %ROOT%backend && call venv\Scripts\activate.bat && echo Starting FastAPI server... && python start_server.py"
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul
 
 REM Launch Frontend (React)
 echo Starting Frontend Server...
-start "MockMate Frontend" cmd /k "cd /d %ROOT%frontend && echo Installing dependencies... && npm install && echo Starting Vite dev server with network access... && npm run dev -- --host 0.0.0.0"
+start "MockMate Frontend" cmd /k "cd /d %ROOT%frontend && echo Starting Vite dev server with network access... && npm run dev -- --host 0.0.0.0"
 
 REM Wait a moment for frontend to start
 timeout /t 3 /nobreak >nul
@@ -50,6 +55,7 @@ echo LOCAL ACCESS:
 echo Frontend: http://localhost:5173
 echo Backend:  http://localhost:8000
 echo API Docs: http://localhost:8000/docs
+echo AI:       Google Gemini API
 echo.
 echo NETWORK ACCESS (for other devices on your WiFi):
 echo Frontend: http://192.168.0.214:5173

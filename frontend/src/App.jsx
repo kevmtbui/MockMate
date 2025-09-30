@@ -5,6 +5,7 @@ import InterviewSetup from "./pages/InterviewSetup";
 import InterviewQAScreen from "./pages/InterviewQAScreen";
 import FeedbackScreen from "./pages/FeedbackScreen";
 import ContactPage from "./pages/ContactPage";
+import "./styles/ProfessionalDesign.css";
 
 export default function App() {
   return (

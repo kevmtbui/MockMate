@@ -3,7 +3,7 @@ from datetime import datetime
 from models.answer import Answer
 from models.interview_settings import InterviewSettings, QuestionGenerationRequest, Question
 from models.feedback import InterviewFeedback, FeedbackItem
-from services.local_ai_service import LocalAIService
+from services.gemini_ai_service import GeminiAIService
 from services.resume_service import ResumeService
 
 # Temporary storage
@@ -14,8 +14,24 @@ current_session: dict = {}
 def generate_questions(request: QuestionGenerationRequest) -> List[Question]:
     """Generate AI-powered custom interview questions"""
     try:
-        # Generate questions using local AI service
-        questions = LocalAIService.generate_questions(request.settings, request.resume_text)
+        print(f"Generating questions with settings: {request.settings.dict()}")
+        print(f"Resume text length: {len(request.resume_text) if request.resume_text else 0}")
+        print(f"AI Summary: {request.settings.ai_summary[:100] if request.settings.ai_summary else 'None'}...")
+        
+        # If we have resume text but no AI summary, analyze the resume first
+        if request.resume_text and not request.settings.ai_summary:
+            print("No AI summary found, analyzing resume...")
+            try:
+                analysis = ResumeService.analyze_resume_with_ai(request.resume_text)
+                ai_summary = ResumeService.generate_resume_summary_for_ai(request.resume_text, analysis)
+                request.settings.ai_summary = ai_summary
+                print(f"Resume analysis completed. AI Summary length: {len(ai_summary)}")
+            except Exception as e:
+                print(f"Error analyzing resume: {e}")
+                # Continue without AI summary
+        
+        # Generate questions using Gemini AI service
+        questions = GeminiAIService.generate_questions(request.settings, request.resume_text)
         
         # Store current session for later use
         global current_session
@@ -30,7 +46,7 @@ def generate_questions(request: QuestionGenerationRequest) -> List[Question]:
     except Exception as e:
         print(f"Error in generate_questions: {e}")
         # Fallback to basic questions
-        return LocalAIService._get_fallback_questions(request.settings)
+        return GeminiAIService._get_fallback_questions(request.settings)
 
 def submit_answer(answer: Answer):
     """Submit an answer and store it in the current session"""
@@ -43,13 +59,20 @@ def submit_answer(answer: Answer):
     # Add to current session
     global current_session
     if current_session:
+        if "answers" not in current_session:
+            current_session["answers"] = []
         current_session["answers"].append(answer_data)
     
+    print(f"Answer submitted. Total answers in session: {len(current_session.get('answers', []))}")
     return {"message": "Answer submitted successfully.", "total_answers": len(user_answers)}
 
 def get_feedback() -> InterviewFeedback:
     """Generate AI-powered feedback based on interview responses"""
     global current_session
+    
+    print(f"Getting feedback. Session exists: {bool(current_session)}")
+    print(f"Session answers: {current_session.get('answers', []) if current_session else 'No session'}")
+    print(f"Session questions count: {len(current_session.get('questions', [])) if current_session else 0}")
     
     if not current_session or not current_session.get("answers"):
         # Return a specific feedback for no answers provided
@@ -99,8 +122,10 @@ def get_feedback() -> InterviewFeedback:
         settings_data = current_session.get("settings", {})
         settings = InterviewSettings(**settings_data)
         
-        # Generate feedback using local AI
-        feedback = LocalAIService.generate_feedback(questions_and_answers, settings)
+        # Generate feedback using Gemini AI
+        print(f"Generating feedback for {len(questions_and_answers)} questions")
+        print(f"Settings: {settings.dict()}")
+        feedback = GeminiAIService.generate_feedback(questions_and_answers, settings)
         
         # Store feedback in session
         current_session["feedback"] = feedback.dict()
@@ -109,7 +134,7 @@ def get_feedback() -> InterviewFeedback:
         
     except Exception as e:
         print(f"Error generating feedback: {e}")
-        return LocalAIService._get_fallback_feedback()
+        return GeminiAIService._get_fallback_feedback()
 
 def get_all_answers():
     return user_answers

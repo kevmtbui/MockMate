@@ -5,7 +5,6 @@ Core Features (MVP)
 - **AI-Powered Question Generation**: Custom questions tailored to resume, job description, and difficulty
 - **Voice Interaction**: Text-to-Speech for questions, Speech-to-Text for answers
 - **Real-time Transcription**: Live transcript display during voice responses
-- **Mid-interview Tips**: AI suggests topics to cover during user hesitation
 - **Comprehensive Feedback**: AI-generated feedback with strengths, weaknesses, and improvements
 
 Interview Settings

@@ -9,7 +9,7 @@ from controllers.interview_controller import (
 )
 from services.resume_service import ResumeService
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.post("/generate-questions")
 def route_generate_questions(request: QuestionGenerationRequest):
@@ -18,16 +18,35 @@ def route_generate_questions(request: QuestionGenerationRequest):
 
 @router.post("/upload-resume")
 async def route_upload_resume(file: UploadFile = File(...)):
-    """Upload and extract text from resume"""
+    """Upload and analyze resume with AI"""
     try:
+        print(f"Uploading file: {file.filename}, content type: {file.content_type}")
         file_content = await file.read()
+        print(f"File size: {len(file_content)} bytes")
+        
         resume_text = ResumeService.extract_text_from_upload(file_content, file.filename)
+        print(f"Extracted text length: {len(resume_text) if resume_text else 0}")
         
         if resume_text:
-            return {"success": True, "resume_text": resume_text}
+            print("Starting AI analysis...")
+            # Use AI to analyze the resume
+            analysis = ResumeService.analyze_resume_with_ai(resume_text)
+            print(f"Analysis completed. Keys: {list(analysis.keys()) if analysis else 'None'}")
+            
+            ai_summary = ResumeService.generate_resume_summary_for_ai(resume_text, analysis)
+            print(f"AI summary length: {len(ai_summary)}")
+            
+            return {
+                "success": True, 
+                "resume_text": resume_text,
+                "analysis": analysis,
+                "ai_summary": ai_summary
+            }
         else:
+            print("Failed to extract text from file")
             return {"success": False, "error": "Could not extract text from file"}
     except Exception as e:
+        print(f"Error in upload-resume: {e}")
         return {"success": False, "error": str(e)}
 
 @router.post("/submit-answer")
