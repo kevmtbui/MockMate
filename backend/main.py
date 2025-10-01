@@ -7,6 +7,8 @@ from routers import interview, health, auth, user_history, tts
 from middleware.rate_limiter import limiter, RateLimitExceeded, rate_limit_handler
 from middleware.session_cleanup import session_manager
 from middleware.logging_config import logger
+from database.config import engine, Base
+from database import models as _db_models  # ensure models are imported
 
 # Load environment variables from .env file
 load_dotenv()
@@ -67,6 +69,12 @@ async def startup_event():
     logger.info("MockMate API starting up...")
     logger.info(f"CORS origins: {allowed_origins}")
     logger.info("All security features active")
+    # Ensure database tables exist (for first deploys / Neon)
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables are ensured (create_all)")
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
 
 # Shutdown event
 @app.on_event("shutdown")
