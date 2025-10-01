@@ -32,14 +32,29 @@ class GeminiAIService:
         Number of Questions: {settings.number_of_questions}
         """
         
+        # Include resume information for context, but with different emphasis based on interview type
         if resume_text:
             # Use AI-generated resume summary if available, otherwise truncate
             if hasattr(settings, 'ai_summary') and settings.ai_summary:
                 print(f"Using AI summary: {settings.ai_summary[:200]}...")
-                context += f"\nResume Analysis: {settings.ai_summary}"
+                resume_info = settings.ai_summary
             else:
                 print(f"No AI summary found, using raw text: {resume_text[:200]}...")
-                context += f"\nResume Summary: {resume_text[:1000]}..."
+                resume_info = f"{resume_text[:1000]}..."
+            
+            # Add resume with different context based on interview type
+            if settings.interview_type.lower() == 'resume':
+                context += f"\nCandidate Resume (PRIMARY FOCUS): {resume_info}"
+                print("Resume interview - resume is PRIMARY focus")
+            elif settings.interview_type.lower() == 'technical':
+                context += f"\nCandidate Background (for context only, focus on job requirements): {resume_info}"
+                print("Technical interview - resume for context, job role is PRIMARY focus")
+            elif settings.interview_type.lower() == 'behavioral':
+                context += f"\nCandidate Background (for context only): {resume_info}"
+                print("Behavioral interview - resume for context, behavioral scenarios are PRIMARY focus")
+            else:  # Mixed or other
+                context += f"\nCandidate Resume: {resume_info}"
+                print("Mixed interview - balanced focus on resume and job")
         
         prompt = AIPrompts.QUESTION_GENERATION_USER.format(
             number_of_questions=settings.number_of_questions,

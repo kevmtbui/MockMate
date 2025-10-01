@@ -1,9 +1,11 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "../styles/ProfessionalDesign.css";
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const features = [
     {
@@ -41,21 +43,36 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="nav-container">
         <div className="nav-content">
-          <a href="/" className="nav-logo">
+          <button onClick={() => navigate("/")} className="nav-logo" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
             <svg className="w-8 h-8 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             MockMate
-          </a>
+          </button>
           <div className="nav-links">
             <a href="#features" className="nav-link">Features</a>
-            <a href="#about" className="nav-link">About</a>
-            <button 
-              onClick={() => navigate("/contact")}
-              className="btn btn-secondary"
-            >
-              Contact
-            </button>
+            {isAuthenticated ? (
+              <>
+                <button onClick={() => navigate("/upload")} className="btn btn-primary">
+                  New Interview
+                </button>
+                <button onClick={() => navigate("/history")} className="btn btn-secondary">
+                  My History
+                </button>
+                <button onClick={logout} className="btn btn-secondary">
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => navigate("/login")} className="btn btn-secondary">
+                  Login
+                </button>
+                <button onClick={() => navigate("/signup")} className="btn btn-secondary">
+                  Sign Up
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -73,18 +90,18 @@ export default function LandingPage() {
               Practice with AI-powered mock interviews, get personalized feedback, and boost your confidence for your next career opportunity.
             </p>
             
-             <div className="flex justify-center items-center mt-12">
-               <button 
-                 onClick={() => navigate("/upload")}
-                 className="btn btn-primary px-16 whitespace-nowrap"
-                 style={{ fontSize: '25px', paddingTop: '20px', paddingBottom: '20px' }}
-               >
-                 Start Your<br />Mock Interview
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                 </svg>
-               </button>
-             </div>
+            <div className="flex justify-center items-center mt-12">
+              <button 
+                onClick={() => navigate(isAuthenticated ? "/upload" : "/auth-prompt")}
+                className="btn btn-primary px-16 whitespace-nowrap"
+                style={{ fontSize: '25px', paddingTop: '20px', paddingBottom: '20px' }}
+              >
+                Start Your<br />Mock Interview
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+            </div>
           </div>
 
         </div>
@@ -128,7 +145,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
             {[
               {
                 step: "1",
@@ -169,7 +186,7 @@ export default function LandingPage() {
             Join thousands of successful candidates who used MockMate to land their dream jobs.
           </p>
           <button 
-            onClick={() => navigate("/upload")}
+            onClick={() => navigate(isAuthenticated ? "/upload" : "/auth-prompt")}
             className="btn btn-secondary text-lg px-8 py-4 bg-white text-cyan-600 hover:bg-gray-100"
             style={{ marginBottom: '60px' }}
           >

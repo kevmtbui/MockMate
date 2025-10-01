@@ -1,30 +1,134 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_ENDPOINTS } from "../config/api";
+import { useAuth } from "../context/AuthContext";
 import "../styles/ProfessionalDesign.css";
 
 export default function UploadForm() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [jobLevel, setJobLevel] = useState("");
-  
-  // Debug log for jobLevel changes
-  React.useEffect(() => {
-    console.log('Current jobLevel:', jobLevel);
-  }, [jobLevel]);
   const [resumeText, setResumeText] = useState("");
   const [resumeAnalysis, setResumeAnalysis] = useState(null);
   const [aiSummary, setAISummary] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [loadingSavedResume, setLoadingSavedResume] = useState(false);
+  const [resumeSaved, setResumeSaved] = useState(false);
+
+  // Load saved resume on mount if user is authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadSavedResume();
+    }
+  }, [isAuthenticated]);
+
+  const loadSavedResume = async () => {
+    try {
+      setLoadingSavedResume(true);
+      const response = await fetch(API_ENDPOINTS.GET_ACTIVE_RESUME, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setResumeText(data.resume_text);
+          setResumeAnalysis(data.ai_analysis);
+          setAISummary(data.ai_summary);
+          // Create a pseudo-file object for display
+          setSelectedFile({ 
+            name: data.filename, 
+            size: data.resume_text.length,
+            fromSaved: true 
+          });
+          console.log('✅ Loaded saved resume:', data.filename);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading saved resume:', error);
+    } finally {
+      setLoadingSavedResume(false);
+    }
+  };
+
+  const saveResumeToAccount = async (resumeData, filename) => {
+    if (!isAuthenticated) {
+      console.log('❌ Not authenticated, skipping resume save');
+      return;
+    }
+
+    try {
+      console.log('💾 Attempting to save resume to account...', {
+        filename,
+        hasResumeText: !!resumeData.resume_text,
+        hasAnalysis: !!resumeData.analysis,
+        hasSummary: !!resumeData.ai_summary
+      });
+
+      const response = await fetch(API_ENDPOINTS.SAVE_RESUME, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          resume_text: resumeData.resume_text,
+          ai_analysis: resumeData.analysis,
+          ai_summary: resumeData.ai_summary,
+          filename: filename
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Resume saved to account:', result);
+        setResumeSaved(true);
+        setTimeout(() => setResumeSaved(false), 3000); // Hide after 3 seconds
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Failed to save resume:', response.status, errorData);
+      }
+    } catch (error) {
+      console.error('❌ Error saving resume to account:', error);
+    }
+  };
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file type before processing
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+        'application/msword' // .doc
+      ];
+      const allowedExtensions = ['.pdf', '.doc', '.docx'];
+      const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+      
+      // Check file extension and MIME type
+      if (!allowedExtensions.includes(fileExtension) || !allowedTypes.includes(file.type)) {
+        alert('❌ Invalid file type!\n\nOnly PDF, DOC, and DOCX files are allowed.\n\nPlease select a valid resume file.');
+        e.target.value = ''; // Clear the file input
+        return;
+      }
+      
+      // Check file size (10MB max)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        alert(`❌ File too large!\n\nMaximum file size is 10MB.\nYour file is ${(file.size / 1024 / 1024).toFixed(2)}MB.\n\nPlease select a smaller file.`);
+        e.target.value = ''; // Clear the file input
+        return;
+      }
+      
       setSelectedFile(file);
       // Clear previous analysis
       setResumeAnalysis(null);
@@ -48,7 +152,7 @@ export default function UploadForm() {
       const formData = new FormData();
       formData.append('file', file);
       
-      const response = await fetch('http://192.168.0.214:8000/api/upload-resume', {
+      const response = await fetch(API_ENDPOINTS.UPLOAD_RESUME, {
         method: 'POST',
         body: formData
       });
@@ -63,6 +167,11 @@ export default function UploadForm() {
           setAISummary(data.ai_summary);
           console.log('AI Analysis stored:', data.analysis);
           console.log('AI Summary stored:', data.ai_summary);
+          
+          // Save resume to user account if authenticated
+          if (isAuthenticated) {
+            await saveResumeToAccount(data, file.name);
+          }
         } else {
           throw new Error(data.error || 'Failed to analyze resume');
         }
@@ -115,15 +224,37 @@ export default function UploadForm() {
     setIsDragging(false);
     
     const files = Array.from(e.dataTransfer.files);
-    const pdfFile = files.find(file => file.type === 'application/pdf');
+    const file = files[0];
     
-    if (pdfFile) {
-      setSelectedFile(pdfFile);
+    if (file) {
+      // Validate file type before processing
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+        'application/msword' // .doc
+      ];
+      const allowedExtensions = ['.pdf', '.doc', '.docx'];
+      const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+      
+      // Check file extension and MIME type
+      if (!allowedExtensions.includes(fileExtension) || !allowedTypes.includes(file.type)) {
+        alert('❌ Invalid file type!\n\nOnly PDF, DOC, and DOCX files are allowed.\n\nPlease drop a valid resume file.');
+        return;
+      }
+      
+      // Check file size (10MB max)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        alert(`❌ File too large!\n\nMaximum file size is 10MB.\nYour file is ${(file.size / 1024 / 1024).toFixed(2)}MB.\n\nPlease select a smaller file.`);
+        return;
+      }
+      
+      setSelectedFile(file);
       // Clear previous analysis
       setResumeAnalysis(null);
       setAISummary("");
       setResumeText("");
-      await extractResumeText(pdfFile);
+      await extractResumeText(file);
     }
   };
 
@@ -181,6 +312,16 @@ export default function UploadForm() {
             <p className="text-xl text-slate-600 max-w-2xl mx-auto">
               Upload your resume and provide job details to get personalized interview questions tailored to your experience and target role.
             </p>
+            
+            {/* Success notification */}
+            {resumeSaved && (
+              <div className="mt-4 inline-flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-lg animate-fade-in">
+                <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-green-800 font-medium">Resume saved to your account!</span>
+              </div>
+            )}
           </div>
 
 
@@ -208,17 +349,30 @@ export default function UploadForm() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.doc,.docx"
                     onChange={handleFileChange}
                     className="hidden"
                     id="resume-upload"
                   />
                   
-                  {selectedFile ? (
+                  {loadingSavedResume ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-6 h-6 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-slate-600">Loading saved resume...</p>
+                      </div>
+                    </div>
+                  ) : selectedFile ? (
                     <div className="space-y-2">
                       <div>
                         <p className="text-lg font-semibold text-slate-900">{selectedFile.name}</p>
-                        <p className="text-slate-600">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p className="text-slate-600">
+                          {selectedFile.fromSaved ? (
+                            <span className="text-green-600 font-medium">✓ Saved Resume</span>
+                          ) : (
+                            `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`
+                          )}
+                        </p>
                       </div>
                       {isExtracting && (
                         <div className="w-full bg-slate-200 rounded-full h-2">
@@ -266,7 +420,7 @@ export default function UploadForm() {
                         <p className="text-lg font-semibold text-slate-900">
                           Drop your resume here or browse
                         </p>
-                        <p className="text-slate-600">PDF files up to 10MB</p>
+                        <p className="text-slate-600">PDF, DOC, or DOCX files up to 10MB</p>
                       </div>
                     </div>
                   )}

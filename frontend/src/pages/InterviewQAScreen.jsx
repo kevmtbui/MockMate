@@ -1,5 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { API_ENDPOINTS } from "../config/api";
+import { 
+  saveInterviewProgress, 
+  loadInterviewProgress, 
+  clearInterviewProgress,
+  hasSavedProgress,
+  getTimeSinceLastSave 
+} from "../utils/interviewStorage";
 import "../styles/ProfessionalDesign.css";
 
 export default function InterviewQAScreen() {
@@ -21,7 +29,15 @@ export default function InterviewQAScreen() {
   
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
+  // Removed audioRef - using Web Speech API instead
   const [enableMicrophone, setEnableMicrophone] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [realisticMode, setRealisticMode] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
+  const currentAudioRef = useRef(null); // Track current playing audio
+  const hasGeneratedQuestions = useRef(false); // Prevent duplicate question generation
+  const lastPlayedQuestionIndex = useRef(-1); // Track which question was last played to prevent duplicates
 
   // Mock questions based on interview type
   const mockQuestions = {
@@ -55,16 +71,61 @@ export default function InterviewQAScreen() {
   };
 
   useEffect(() => {
+    // Check for saved progress first
+    const savedProgress = loadInterviewProgress();
+    
+    if (savedProgress && savedProgress.questions && savedProgress.questions.length > 0) {
+      // Restore from saved progress
+      const minutesAgo = getTimeSinceLastSave();
+      const shouldRestore = window.confirm(
+        `Resume your interview from ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago?\n\n` +
+        `You were on question ${savedProgress.currentQuestionIndex + 1} of ${savedProgress.questions.length}.\n\n` +
+        `Click OK to continue, or Cancel to start fresh.`
+      );
+      
+      if (shouldRestore) {
+        setSetupData(savedProgress.setupData || {});
+        setQuestions(savedProgress.questions || []);
+        setAnswers(savedProgress.answers || []);
+        setCurrentQuestionIndex(savedProgress.currentQuestionIndex || 0);
+        setResponse(savedProgress.answers?.[savedProgress.currentQuestionIndex] || "");
+        setInterviewStarted(true);
+        setQuestionsLoading(false);
+        
+        // Set time for current question
+        const prepTime = savedProgress.setupData?.preparationTime || 0;
+        if (prepTime > 0) {
+          setTimeRemaining(prepTime);
+          setIsPrepTime(true);
+          setIsAnswerTime(false);
+        } else {
+          setTimeRemaining((savedProgress.setupData?.answerTime || 3) * 60);
+          setIsPrepTime(false);
+          setIsAnswerTime(true);
+        }
+        return;
+      } else {
+        // User chose to start fresh
+        clearInterviewProgress();
+      }
+    }
+    
     if (!location.state) {
       navigate("/upload");
       return;
     }
     
-    // Generate AI questions
-    generateAQuestions();
+    // Generate AI questions only once (prevent React StrictMode double-mount)
+    if (!hasGeneratedQuestions.current) {
+      hasGeneratedQuestions.current = true;
+      generateAQuestions();
+    }
     
+    // Realistic mode from setup
+    setRealisticMode(!!setupData.realisticMode);
+
     // Initialize with preparation time
-    const prepTime = setupData.preparationTime || 0;
+    const prepTime = setupData.realisticMode ? 120 : (setupData.preparationTime || 0);
     if (prepTime > 0) {
       setTimeRemaining(prepTime);
       setIsPrepTime(true);
@@ -74,8 +135,11 @@ export default function InterviewQAScreen() {
       setIsPrepTime(false);
       setIsAnswerTime(true);
     }
-    setEnableMicrophone(setupData.voiceEnabled || false);
-  }, [location.state, navigate, setupData.interviewType, setupData.questionCount, setupData.preparationTime, setupData.answerTime]);
+    // In realistic mode, force-enable both
+    setEnableMicrophone(setupData.realisticMode ? true : (setupData.voiceEnabled || false));
+    setTtsEnabled(setupData.realisticMode ? true : (setupData.ttsEnabled || false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, navigate]);
 
   const generateAQuestions = async () => {
     setQuestionsLoading(true);
@@ -110,7 +174,7 @@ export default function InterviewQAScreen() {
       console.log('Generating AI questions with data:', requestData);
       console.log('Setup data:', setupData);
       
-      const response = await fetch('http://192.168.0.214:8000/api/generate-questions', {
+      const response = await fetch(API_ENDPOINTS.GENERATE_QUESTIONS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,6 +203,87 @@ export default function InterviewQAScreen() {
     }
   };
 
+  // Play TTS for question when it changes
+  const playQuestionAudio = useCallback(async (questionText) => {
+    if (!ttsEnabled || !questionText) {
+      console.log('⏭️ TTS not enabled or no question text');
+      return;
+    }
+    
+    // Stop any currently playing audio
+    if (currentAudioRef.current) {
+      console.log('⏹️ Stopping previous TTS audio');
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    
+    try {
+      setIsPlayingAudio(true);
+      console.log('🔊 Requesting Google Cloud TTS for question:', questionText.substring(0, 50) + '...');
+      
+      const response = await fetch(API_ENDPOINTS.TTS_SYNTHESIZE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: questionText,
+          language_code: 'en-US',
+          voice: 'en-US-Chirp3-HD-Laomedeia'
+        })
+      });
+      
+      console.log('🔊 TTS API response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔊 TTS response received');
+        
+        if (data.success && data.audio) {
+          // Create audio element and play
+          const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
+          currentAudioRef.current = audio; // Store reference to current audio
+          
+          audio.onended = () => {
+            setIsPlayingAudio(false);
+            currentAudioRef.current = null;
+            console.log('✅ TTS playback finished');
+            // In realistic mode: end prep exactly when TTS completes
+            if (realisticMode && isPrepTime) {
+              setIsPrepTime(false);
+              setIsAnswerTime(true);
+              setTimeRemaining((setupData.answerTime || 3) * 60);
+              if (enableMicrophone) {
+                startRecording();
+              }
+            }
+          };
+          
+          audio.onerror = (e) => {
+            setIsPlayingAudio(false);
+            currentAudioRef.current = null;
+            console.error('❌ TTS playback error:', e);
+          };
+          
+          await audio.play();
+          console.log('🔊 Playing Google Cloud TTS audio with Chirp3-HD voice...');
+        } else {
+          console.error('❌ TTS API returned no audio');
+          setIsPlayingAudio(false);
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('❌ TTS API error:', response.status, errorText);
+        setIsPlayingAudio(false);
+      }
+    } catch (error) {
+      console.error('❌ Error in playQuestionAudio:', error);
+      setIsPlayingAudio(false);
+    }
+  }, [ttsEnabled]);
+
+  // TTS is now handled by backend Google Cloud TTS - no voice loading needed
+
   // Load the current answer when question index changes
   useEffect(() => {
     if (answers[currentQuestionIndex]) {
@@ -146,7 +291,32 @@ export default function InterviewQAScreen() {
     } else {
       setResponse("");
     }
-  }, [currentQuestionIndex]);
+  }, [currentQuestionIndex, answers]);
+
+  // Separate effect for TTS - only trigger when question index changes, not when questions array changes
+  useEffect(() => {
+    // Only play TTS after questions are loaded AND interview has started AND this question hasn't been played yet
+    if (questions.length > 0 && 
+        questions[currentQuestionIndex] && 
+        interviewStarted && 
+        ttsEnabled && 
+        !questionsLoading &&
+        lastPlayedQuestionIndex.current !== currentQuestionIndex) {
+      
+      console.log('🎯 Triggering TTS playback for question:', currentQuestionIndex);
+      lastPlayedQuestionIndex.current = currentQuestionIndex; // Mark this question as played
+      playQuestionAudio(questions[currentQuestionIndex]);
+    } else {
+      console.log('⏭️ Skipping TTS:', {
+        hasQuestions: questions.length > 0,
+        hasCurrentQuestion: !!questions[currentQuestionIndex],
+        interviewStarted,
+        ttsEnabled,
+        questionsLoading,
+        alreadyPlayed: lastPlayedQuestionIndex.current === currentQuestionIndex
+      });
+    }
+  }, [currentQuestionIndex, interviewStarted, ttsEnabled, questionsLoading, playQuestionAudio]);
 
   useEffect(() => {
     if (interviewStarted && timeRemaining > 0 && !interviewCompleted) {
@@ -262,10 +432,18 @@ export default function InterviewQAScreen() {
   };
 
   const handleNextQuestion = () => {
+    // Stop any playing TTS audio when moving to next question
+    if (currentAudioRef.current) {
+      console.log('⏹️ Stopping TTS audio before moving to next question');
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+      setIsPlayingAudio(false);
+    }
+    
     if (currentQuestionIndex < questions.length - 1) {
       const nextIndex = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIndex);
-      const prepTime = setupData.preparationTime || 0;
+      const prepTime = setupData.realisticMode ? 120 : (setupData.preparationTime || 0);
       if (prepTime > 0) {
         setTimeRemaining(prepTime);
         setIsPrepTime(true);
@@ -281,8 +459,19 @@ export default function InterviewQAScreen() {
       setIsRecording(false);
       // Load the answer for the next question if it exists
       setResponse(answers[nextIndex] || "");
+      
+      // Autosave progress
+      saveInterviewProgress({
+        setupData,
+        questions,
+        answers,
+        currentQuestionIndex: nextIndex,
+        interviewStarted: true
+      });
     } else {
       setInterviewCompleted(true);
+      // Clear saved progress when interview is complete
+      clearInterviewProgress();
       // Submit all answers to backend for AI feedback
       submitAnswersForFeedback();
     }
@@ -292,7 +481,7 @@ export default function InterviewQAScreen() {
     if (currentQuestionIndex > 0) {
       const prevIndex = currentQuestionIndex - 1;
       setCurrentQuestionIndex(prevIndex);
-      const prepTime = setupData.preparationTime || 0;
+      const prepTime = setupData.realisticMode ? 120 : (setupData.preparationTime || 0);
       if (prepTime > 0) {
         setTimeRemaining(prepTime);
         setIsPrepTime(true);
@@ -316,6 +505,15 @@ export default function InterviewQAScreen() {
     const newAnswers = [...answers];
     newAnswers[currentQuestionIndex] = answer;
     setAnswers(newAnswers);
+    
+    // Autosave progress
+    saveInterviewProgress({
+      setupData,
+      questions,
+      answers: newAnswers,
+      currentQuestionIndex,
+      interviewStarted: true
+    });
   };
 
   const submitAnswersForFeedback = async () => {
@@ -327,12 +525,12 @@ export default function InterviewQAScreen() {
       // Submit each answer to backend
       for (let i = 0; i < questions.length; i++) {
         const answer = answers[i] || '';
-        await fetch('http://192.168.0.214:8000/api/submit-answer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+        await fetch(API_ENDPOINTS.SUBMIT_ANSWER, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             question_id: i + 1,
             answer: answer,
             question: questions[i]
@@ -420,8 +618,8 @@ export default function InterviewQAScreen() {
                     <div className="flex justify-between">
                       <span className="text-slate-600">Preparation time per question:</span>
                       <span className="font-medium text-slate-900">
-                        {setupData.preparationTime === 0 ? 'No preparation time' : `${setupData.preparationTime} seconds`}
-                    </span>
+                        {setupData.realisticMode ? 'Realistic Mode' : (setupData.preparationTime === 0 ? 'No preparation time' : `${setupData.preparationTime} seconds`)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-600">Time to answer each question:</span>
@@ -430,6 +628,10 @@ export default function InterviewQAScreen() {
                     <div className="flex justify-between">
                       <span className="text-slate-600">Voice recognition:</span>
                       <span className="font-medium text-slate-900">{setupData.voiceEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Read questions aloud (TTS):</span>
+                      <span className="font-medium text-slate-900">{setupData.ttsEnabled ? 'Enabled' : 'Disabled'}</span>
                     </div>
                   </div>
                 </div>
@@ -503,11 +705,13 @@ export default function InterviewQAScreen() {
                 <span className="text-sm font-medium text-slate-600">
                   Question {currentQuestionIndex + 1} of {questions.length}
                 </span>
-                <div className="flex items-center space-x-2">
-                  <span className={`text-lg font-semibold ${isPrepTime ? 'text-yellow-800' : 'text-green-800'}`}>
-                    {isPrepTime ? 'Prep: ' : 'Answer: '}{formatTime(timeRemaining)}
-                  </span>
-                </div>
+                {!(realisticMode && isPrepTime) && (
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-lg font-semibold ${isPrepTime ? 'text-yellow-800' : 'text-green-800'}`}>
+                      {isPrepTime ? 'Prep: ' : 'Answer: '}{formatTime(timeRemaining)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Question */}
@@ -519,7 +723,7 @@ export default function InterviewQAScreen() {
 
               {/* Phase Indicator */}
               <div className="mb-6">
-                {isPrepTime && (
+                {isPrepTime && !realisticMode && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
@@ -616,12 +820,9 @@ export default function InterviewQAScreen() {
               <button
                   onClick={handleNextQuestion}
                   disabled={isPrepTime}
-                  className={`btn btn-primary ${isPrepTime ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`btn ${currentQuestionIndex === questions.length - 1 ? 'btn-secondary' : 'btn-primary'} px-4 py-2 text-sm ${isPrepTime ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                  {currentQuestionIndex === questions.length - 1 ? 'Finish' : 'Next'}
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  {currentQuestionIndex === questions.length - 1 ? 'Finish Interview' : 'Next Question'}
               </button>
               </div>
             </div>

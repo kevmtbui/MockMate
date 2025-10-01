@@ -12,6 +12,8 @@ export default function InterviewSetup() {
   const [timeLimit, setTimeLimit] = useState(30); // Default to 30 seconds preparation time
   const [difficulty, setDifficulty] = useState("");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [realisticMode, setRealisticMode] = useState(false);
 
   // Debug log for interviewType changes
   useEffect(() => {
@@ -45,6 +47,12 @@ export default function InterviewSetup() {
       }
       if (location.state.voiceEnabled !== undefined) {
         setVoiceEnabled(location.state.voiceEnabled);
+      }
+      if (location.state.ttsEnabled !== undefined) {
+        setTtsEnabled(location.state.ttsEnabled);
+      }
+      if (location.state.realisticMode !== undefined) {
+        setRealisticMode(location.state.realisticMode);
       }
     }
   }, [location.state, navigate]);
@@ -107,7 +115,9 @@ export default function InterviewSetup() {
         preparationTime: timeLimit, // Time to prepare before each question
         answerTime: 3, // Fixed 3 minutes to answer each question
         difficulty,
-        voiceEnabled
+        realisticMode,
+        voiceEnabled: realisticMode ? true : voiceEnabled,
+        ttsEnabled: realisticMode ? true : ttsEnabled
       }
     });
   };
@@ -170,14 +180,14 @@ export default function InterviewSetup() {
                 </div>
               </div>
             </div>
-            </div>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Interview Type */}
             <div className="card">
               <div className="card-header">
                 <h2 className="text-xl font-bold text-slate-900">Interview Type</h2>
-            </div>
+              </div>
               <div className="card-body space-y-4">
                 <div 
                   onClick={(e) => {
@@ -277,8 +287,9 @@ export default function InterviewSetup() {
                       max="120"
                       step="5"
                       value={timeLimit}
-                      onChange={(e) => setTimeLimit(parseInt(e.target.value))}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer slider"
+                      onChange={(e) => !realisticMode && setTimeLimit(parseInt(e.target.value))}
+                      disabled={realisticMode}
+                      className={`w-full h-2 rounded-lg appearance-none slider ${realisticMode ? 'bg-slate-200 opacity-50 cursor-not-allowed' : 'bg-slate-200 cursor-pointer'}`}
                       style={{
                         background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${(timeLimit / 120) * 100}%, #e2e8f0 ${(timeLimit / 120) * 100}%, #e2e8f0 100%)`
                       }}
@@ -389,44 +400,124 @@ export default function InterviewSetup() {
           {/* Voice Settings */}
           <div className="card mt-8">
             <div className="card-header">
-              <h2 className="text-xl font-bold text-slate-900">Interview Settings</h2>
+              <h2 className="text-xl font-bold text-slate-900">Voice Settings</h2>
             </div>
             <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-slate-900">Voice Recognition</h3>
-                  <p className="text-sm text-slate-600">Enable voice input for a more realistic interview experience</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    console.log('Voice toggle clicked, current state:', voiceEnabled);
-                    setVoiceEnabled(!voiceEnabled);
-                  }}
-                  className={`relative inline-flex items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 ${
-                    voiceEnabled 
-                      ? 'bg-slate-700 border-4 border-slate-800 shadow-xl shadow-slate-700/70' 
-                      : 'bg-slate-300 border-2 border-slate-400 shadow-lg'
-                  }`}
-                  style={{ 
-                    height: '40px', 
-                    width: '80px',
-                    backgroundColor: voiceEnabled ? '#374151' : '#cbd5e1',
-                    border: voiceEnabled ? '4px solid #1f2937' : '2px solid #94a3b8'
-                  }}
-                >
-                  <span
-                    className={`inline-block transform rounded-full transition-all duration-200 ${
-                      voiceEnabled ? 'bg-white shadow-xl' : 'bg-slate-500'
+              <div className="space-y-6">
+                {/* Realistic Mode */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Realistic Mode</h3>
+                    <p className="text-sm text-slate-600">Prep ends when TTS finishes. Voice + TTS are auto-enabled and controls are locked.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRealisticMode(!realisticMode)}
+                    className={`relative inline-flex items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 ${
+                      realisticMode 
+                        ? 'bg-slate-700 border-4 border-slate-800 shadow-xl shadow-slate-700/70' 
+                        : 'bg-slate-300 border-2 border-slate-400 shadow-lg'
                     }`}
-                    style={{
-                      height: '32px',
-                      width: '32px',
-                      backgroundColor: voiceEnabled ? '#ffffff' : '#64748b',
-                      transform: voiceEnabled ? 'translateX(44px)' : 'translateX(4px)'
+                    style={{ 
+                      height: '40px', 
+                      width: '80px',
+                      backgroundColor: realisticMode ? '#374151' : '#cbd5e1',
+                      border: realisticMode ? '4px solid #1f2937' : '2px solid #94a3b8'
                     }}
-                  />
-                </button>
+                  >
+                    <span
+                      className={`inline-block transform rounded-full transition-all duration-200 ${
+                        realisticMode ? 'bg-white shadow-xl' : 'bg-slate-500'
+                      }`}
+                      style={{
+                        height: '32px',
+                        width: '32px',
+                        backgroundColor: realisticMode ? '#ffffff' : '#64748b',
+                        transform: realisticMode ? 'translateX(44px)' : 'translateX(4px)'
+                      }}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Voice Recognition</h3>
+                    <p className="text-sm text-slate-600">Enable voice input for a more realistic interview experience</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (realisticMode) return;
+                      console.log('Voice toggle clicked, current state:', voiceEnabled);
+                      setVoiceEnabled(!voiceEnabled);
+                    }}
+                    className={`relative inline-flex items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 ${
+                      (realisticMode ? true : voiceEnabled) 
+                        ? 'bg-slate-700 border-4 border-slate-800 shadow-xl shadow-slate-700/70' 
+                        : 'bg-slate-300 border-2 border-slate-400 shadow-lg'
+                    }`}
+                    style={{ 
+                      height: '40px', 
+                      width: '80px',
+                      backgroundColor: (realisticMode ? true : voiceEnabled) ? '#374151' : '#cbd5e1',
+                      border: (realisticMode ? true : voiceEnabled) ? '4px solid #1f2937' : '2px solid #94a3b8',
+                      pointerEvents: realisticMode ? 'none' : 'auto',
+                      opacity: realisticMode ? 0.6 : 1
+                    }}
+                  >
+                    <span
+                      className={`inline-block transform rounded-full transition-all duration-200 ${
+                        (realisticMode ? true : voiceEnabled) ? 'bg-white shadow-xl' : 'bg-slate-500'
+                      }`}
+                      style={{
+                        height: '32px',
+                        width: '32px',
+                        backgroundColor: (realisticMode ? true : voiceEnabled) ? '#ffffff' : '#64748b',
+                        transform: (realisticMode ? true : voiceEnabled) ? 'translateX(44px)' : 'translateX(4px)'
+                      }}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Read Questions Aloud (TTS)</h3>
+                    <p className="text-sm text-slate-600">Have interview questions read to you using Google Text-to-Speech</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (realisticMode) return;
+                      console.log('TTS toggle clicked, current state:', ttsEnabled);
+                      setTtsEnabled(!ttsEnabled);
+                    }}
+                    className={`relative inline-flex items-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 ${
+                      (realisticMode ? true : ttsEnabled) 
+                        ? 'bg-slate-700 border-4 border-slate-800 shadow-xl shadow-slate-700/70' 
+                        : 'bg-slate-300 border-2 border-slate-400 shadow-lg'
+                    }`}
+                    style={{ 
+                      height: '40px', 
+                      width: '80px',
+                      backgroundColor: (realisticMode ? true : ttsEnabled) ? '#374151' : '#cbd5e1',
+                      border: (realisticMode ? true : ttsEnabled) ? '4px solid #1f2937' : '2px solid #94a3b8',
+                      pointerEvents: realisticMode ? 'none' : 'auto',
+                      opacity: realisticMode ? 0.6 : 1
+                    }}
+                  >
+                    <span
+                      className={`inline-block transform rounded-full transition-all duration-200 ${
+                        (realisticMode ? true : ttsEnabled) ? 'bg-white shadow-xl' : 'bg-slate-500'
+                      }`}
+                      style={{
+                        height: '32px',
+                        width: '32px',
+                        backgroundColor: (realisticMode ? true : ttsEnabled) ? '#ffffff' : '#64748b',
+                        transform: (realisticMode ? true : ttsEnabled) ? 'translateX(44px)' : 'translateX(4px)'
+                      }}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
         </div>

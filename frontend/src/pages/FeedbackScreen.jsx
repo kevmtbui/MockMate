@@ -1,13 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { API_ENDPOINTS } from "../config/api";
+import { exportInterviewToPDF } from "../utils/pdfExport";
+import { useAuth } from "../context/AuthContext";
 import "../styles/ProfessionalDesign.css";
 
 export default function FeedbackScreen() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, token, isAuthenticated } = useAuth();
   const [interviewData, setInterviewData] = useState(location.state || {});
   const [activeTab, setActiveTab] = useState("overall");
   const [isLoading, setIsLoading] = useState(true);
+  const [savedToAccount, setSavedToAccount] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasFetchedFeedback, setHasFetchedFeedback] = useState(false);
+  const hasSavedRef = useRef(false);
+  const [interviewId] = useState(() => {
+    // Generate unique ID for this interview session to prevent duplicates
+    return `interview_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  });
 
   // Mock feedback data
   const [feedback, setFeedback] = useState({
@@ -36,23 +48,104 @@ export default function FeedbackScreen() {
     }
   });
 
+  const saveToUserHistory = async (feedbackData) => {
+    // CRITICAL: Check useRef first - this persists across re-renders
+    if (hasSavedRef.current) {
+      console.log('🛑 Interview already saved (useRef check), BLOCKING duplicate save');
+      return;
+    }
+    
+    // Check if this interview session has already been saved
+    const savedInterviews = JSON.parse(localStorage.getItem('savedInterviews') || '[]');
+    if (savedInterviews.includes(interviewId)) {
+      console.log('🛑 Interview already saved (localStorage check), skipping duplicate save');
+      return;
+    }
+    
+    // Prevent duplicate saves
+    if (savedToAccount || isSaving) {
+      console.log('🛑 Interview already saved or currently saving, skipping duplicate save');
+      return;
+    }
+    
+    // Mark as saving immediately
+    hasSavedRef.current = true;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.SAVE_INTERVIEW, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          job_title: interviewData.jobTitle,
+          company_name: interviewData.companyName,
+          job_level: interviewData.jobLevel,
+          interview_type: interviewData.interviewType,
+          difficulty: interviewData.difficulty,
+          questions: interviewData.questions || [],
+          answers: interviewData.answers || [],
+          overall_score: feedbackData.overall.score,
+          communication_score: feedbackData.categories.communication.score,
+          technical_score: feedbackData.categories.technical.score,
+          problem_solving_score: feedbackData.categories.problemSolving.score,
+          behavioral_score: feedbackData.categories.behavioral.score,
+          feedback_summary: feedbackData.overall.summary,
+          strengths: feedbackData.overall.strengths,
+          improvements: feedbackData.overall.improvements
+        })
+      });
+
+      if (response.ok) {
+        setSavedToAccount(true);
+        // Mark this interview as saved in localStorage
+        const savedInterviews = JSON.parse(localStorage.getItem('savedInterviews') || '[]');
+        savedInterviews.push(interviewId);
+        localStorage.setItem('savedInterviews', JSON.stringify(savedInterviews));
+        console.log('✅ Interview saved to account with ID:', interviewId);
+      } else {
+        console.error('Failed to save interview:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Failed to save to account:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
+    console.log('🔄 FeedbackScreen useEffect triggered with interview ID:', interviewId);
     if (!location.state) {
       navigate("/upload");
       return;
     }
 
-    // Generate AI feedback
-    generateAIFeedback();
-  }, [location.state, navigate, interviewData]);
+    // Only generate feedback once
+    if (!hasFetchedFeedback) {
+      console.log('🔄 Generating AI feedback (first time)');
+      generateAIFeedback();
+    } else {
+      console.log('⏭️ Skipping feedback generation - already fetched');
+    }
+  }, [location.state, navigate, hasFetchedFeedback]);
 
   const generateAIFeedback = async () => {
+    // Prevent multiple executions
+    if (hasFetchedFeedback) {
+      console.log('⏭️ Already fetched feedback, skipping...');
+      return;
+    }
+    
+    setHasFetchedFeedback(true);
+    
     try {
       console.log('Fetching AI feedback...');
       console.log('Interview data:', interviewData);
       console.log('Questions:', interviewData.questions);
       console.log('Answers:', interviewData.answers);
-      const response = await fetch('http://192.168.0.214:8000/api/get-feedback');
+      const response = await fetch(API_ENDPOINTS.GET_FEEDBACK);
       
       if (response.ok) {
         const aiFeedback = await response.json();
@@ -86,31 +179,14 @@ export default function FeedbackScreen() {
         };
         
         setFeedback(transformedFeedback);
+        
+        // Auto-save to user account if logged in
+        if (isAuthenticated && token && !location.state?.isHistorical) {
+          console.log('🔄 Auto-saving interview to account (AI feedback path)');
+          saveToUserHistory(transformedFeedback);
+        }
       } else {
-        console.error('Failed to get AI feedback, using fallback');
-        // Use fallback feedback with AI structure
-        const fallbackFeedback = {
-          overall: {
-            score: 44, // 4/10 converted to 1-100 scale
-            summary: "MEDIOCRE performance that shows you're not ready for this level. Your responses lack depth, specificity, and real-world experience.",
-            strengths: ["Basic Communication"],
-            improvements: ["LACKS SUBSTANCE: Vague and Generic Responses", "URGENT: Develop Real Technical Depth"]
-          },
-          questions: (interviewData.questions || []).map((question, index) => ({
-            question: question || "Question not available",
-            answer: (interviewData.answers && interviewData.answers[index]) ? interviewData.answers[index] : "No answer provided",
-            score: index === 0 ? 44 : 33, // 4/10 and 3/10 converted to 1-100 scale
-            feedback: index === 0 ? "Mediocre response lacking depth" : "Vague and generic answer",
-            suggestions: index === 0 ? ["Provide specific examples"] : ["Use STAR method"]
-          })),
-          categories: {
-            communication: { score: 56, label: "Communication" }, // 5/10 converted
-            technical: { score: 33, label: "Technical Skills" }, // 3/10 converted
-            problemSolving: { score: 44, label: "Problem Solving" }, // 4/10 converted
-            behavioral: { score: 44, label: "Behavioral Fit" } // 4/10 converted
-          }
-        };
-        setFeedback(fallbackFeedback);
+        throw new Error('Failed to get AI feedback from server');
       }
     } catch (error) {
       console.error('Error generating AI feedback:', error);
@@ -137,6 +213,12 @@ export default function FeedbackScreen() {
         }
       };
       setFeedback(fallbackFeedback);
+      
+      // Auto-save to user account if logged in
+      if (isAuthenticated && token && !location.state?.isHistorical) {
+        console.log('🔄 Auto-saving interview to account (fallback path)');
+        saveToUserHistory(fallbackFeedback);
+      }
     }
     
     setIsLoading(false);
@@ -210,6 +292,14 @@ export default function FeedbackScreen() {
             MockMate
           </a>
           <div className="nav-links">
+            {isAuthenticated && (
+              <button 
+                onClick={() => navigate("/history")}
+                className="btn btn-secondary"
+              >
+                My History
+              </button>
+            )}
             <button 
               onClick={() => navigate("/")}
               className="btn btn-secondary"
@@ -231,6 +321,14 @@ export default function FeedbackScreen() {
             <p className="text-xl text-slate-600">
               Here's how you performed in your {interviewData.interviewType} interview
             </p>
+            {savedToAccount && (
+              <div className="mt-4 inline-flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-green-800 font-medium">Saved to your account</span>
+              </div>
+            )}
           </div>
 
           {/* Overall Score */}
@@ -373,6 +471,13 @@ export default function FeedbackScreen() {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12 mb-16">
             <button
+              onClick={() => exportInterviewToPDF(interviewData, feedback)}
+              className="btn btn-primary"
+              title="Export your interview report as PDF"
+            >
+              Export to PDF
+            </button>
+            <button
               onClick={() => navigate("/interview", { 
                 state: {
                   ...interviewData,
@@ -382,10 +487,11 @@ export default function FeedbackScreen() {
                   questionCount: interviewData.questionCount,
                   interviewType: interviewData.interviewType,
                   difficulty: interviewData.difficulty,
-                  voiceEnabled: interviewData.voiceEnabled
+                  voiceEnabled: interviewData.voiceEnabled,
+                  ttsEnabled: interviewData.ttsEnabled
                 }
               })}
-              className="btn btn-primary"
+              className="btn btn-secondary"
             >
               Retry Interview
             </button>
@@ -404,7 +510,8 @@ export default function FeedbackScreen() {
                   questionCount: interviewData.questionCount,
                   interviewType: interviewData.interviewType,
                   difficulty: interviewData.difficulty,
-                  voiceEnabled: interviewData.voiceEnabled
+                  voiceEnabled: interviewData.voiceEnabled,
+                  ttsEnabled: interviewData.ttsEnabled
                 }
               })}
               className="btn btn-secondary"

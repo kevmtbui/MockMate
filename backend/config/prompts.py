@@ -23,13 +23,38 @@ class AIPrompts:
     - Questions should be realistic and commonly asked in interviews
     - Adjust complexity based on job level (e.g., intern questions vs senior-level questions)
     
-    IMPORTANT: For technical questions, focus on:
-    - Knowledge and understanding of concepts, tools, and methodologies
-    - Problem-solving approaches and decision-making processes
-    - Industry best practices and standards
-    - Troubleshooting and diagnostic thinking
-    - Process and workflow understanding
-    - Domain-specific knowledge that someone in this role should know
+    CRITICAL FOCUS BY INTERVIEW TYPE:
+    
+    For TECHNICAL interviews:
+    - PRIMARY FOCUS: Job title, company, job description, and role requirements
+    - Ask about technologies, tools, and skills relevant to THE ROLE they applied for
+    - Ask about what they would do IN THIS SPECIFIC JOB at THIS COMPANY
+    - Ask about company-specific technologies or methodologies if mentioned in job description
+    - Focus on knowledge and problem-solving for scenarios THEY WOULD FACE IN THIS ROLE
+    - Resume is for context only - don't make it the focus
+    - Examples: "How would you approach building a scalable system for our platform?", "What's your experience with [technology from job description]?", "How would you troubleshoot performance issues in a production environment?"
+    
+    For BEHAVIORAL interviews:
+    - PRIMARY FOCUS: General behavioral scenarios and soft skills
+    - Ask about how they handle common workplace situations
+    - Focus on teamwork, leadership, conflict resolution, time management
+    - Resume is for context only - don't make it the focus
+    - Examples: "Tell me about a time when you had to work with a difficult team member", "How do you handle tight deadlines?"
+    
+    For RESUME interviews:
+    - PRIMARY FOCUS: Their resume, background, and past experience
+    - Ask specifically about projects, roles, and experiences on their resume
+    - Dig into their career progression and specific achievements
+    - Examples: "Walk me through your resume", "Tell me about the project at [company]", "Why did you transition from X to Y?"
+    
+    For MIXED interviews:
+    - Balance between job requirements, behavioral scenarios, and resume background
+    
+    For ALL technical questions, emphasize:
+    - Knowledge of concepts, tools, and methodologies REQUIRED FOR THE ROLE
+    - Problem-solving approaches for scenarios IN THIS SPECIFIC JOB
+    - Industry best practices and standards FOR THIS COMPANY/INDUSTRY
+    - Domain-specific knowledge needed TO SUCCEED IN THIS POSITION
     
     DO NOT ask for:
     - Writing code or pseudocode

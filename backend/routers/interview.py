@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, UploadFile, File, Form
+from fastapi import APIRouter, Query, UploadFile, File, Form, Request
 from typing import List
 from pydantic import BaseModel
 from models.answer import Answer
@@ -8,20 +8,32 @@ from controllers.interview_controller import (
     get_all_answers, get_current_session, start_new_session
 )
 from services.resume_service import ResumeService
+from middleware.file_security import validate_upload_file
+from middleware.rate_limiter import limiter
 
 router = APIRouter(prefix="/api")
 
 @router.post("/generate-questions")
-def route_generate_questions(request: QuestionGenerationRequest):
+@limiter.limit("10/minute")
+async def route_generate_questions(
+    question_request: QuestionGenerationRequest,
+    request: Request
+):
     """Generate AI-powered custom interview questions"""
-    return {"questions": generate_questions(request)}
+    return {"questions": generate_questions(question_request)}
 
 @router.post("/upload-resume")
-async def route_upload_resume(file: UploadFile = File(...)):
+@limiter.limit("5/minute")
+async def route_upload_resume(
+    request: Request,
+    file: UploadFile = File(...)
+):
     """Upload and analyze resume with AI"""
     try:
         print(f"Uploading file: {file.filename}, content type: {file.content_type}")
-        file_content = await file.read()
+        
+        # Validate file security
+        file_content = await validate_upload_file(file)
         print(f"File size: {len(file_content)} bytes")
         
         resume_text = ResumeService.extract_text_from_upload(file_content, file.filename)
@@ -50,24 +62,45 @@ async def route_upload_resume(file: UploadFile = File(...)):
         return {"success": False, "error": str(e)}
 
 @router.post("/submit-answer")
-def route_submit_answer(answer: Answer):
+@limiter.limit("20/minute")
+async def route_submit_answer(answer: Answer, request: Request):
     return submit_answer(answer)
 
 @router.get("/get-feedback")
-def route_get_feedback():
+@limiter.limit("10/minute")
+async def route_get_feedback(request: Request):
     return get_feedback()
 
 @router.get("/answers")
-def route_get_all_answers():
+@limiter.limit("30/minute")
+async def route_get_all_answers(request: Request):
     return {"user_answers": get_all_answers()}
 
 @router.get("/current-session")
-def route_get_current_session():
+@limiter.limit("30/minute")
+async def route_get_current_session(request: Request):
     return get_current_session()
 
 @router.post("/start-new-session")
-def route_start_new_session():
+@limiter.limit("10/minute")
+async def route_start_new_session(request: Request):
     return start_new_session()
+
+@router.post("/delete-my-session")
+@limiter.limit("10/minute")
+async def route_delete_session(session_id: str, request: Request):
+    """Allow users to delete their interview data"""
+    from middleware.session_cleanup import session_manager
+    if session_manager.delete_session(session_id):
+        return {"success": True, "message": "Your data has been deleted"}
+    return {"success": False, "message": "Session not found or already deleted"}
+
+@router.get("/session-stats")
+@limiter.limit("10/minute")
+async def route_get_session_stats(request: Request):
+    """Get session statistics (for monitoring)"""
+    from middleware.session_cleanup import session_manager
+    return session_manager.get_stats()
 
 
 # Voice endpoints removed - now using browser APIs
