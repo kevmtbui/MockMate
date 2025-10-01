@@ -36,19 +36,21 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Get allowed origins from environment or use secure defaults
-allowed_origins = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173"
-).split(",")
+# Get allowed origins from environment or use secure defaults (strip spaces)
+allowed_origins = [
+    o.strip() for o in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",") if o.strip()
+]
 
 # CORS - Secure configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,  # Only specified origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],  # Include OPTIONS for preflight
-    allow_headers=["Content-Type", "Authorization"],  # Only needed headers
+    allow_methods=["*"],  # allow all methods; simplifies preflight
+    allow_headers=["*"],  # allow all headers; simplifies preflight
     max_age=3600  # Cache preflight requests for 1 hour
 )
 
