@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from datetime import datetime
 import os
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.get("/health")
 async def health_check():
@@ -22,7 +22,7 @@ async def root():
     return {
         "message": "MockMate API is running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/api/health"
     }
 
 
