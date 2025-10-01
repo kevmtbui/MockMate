@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/auth", tags=["authentication"])
 class UserSignup(BaseModel):
     email: EmailStr
     password: str
-    full_name: str = None
+    full_name: str | None = None
 
 class UserLogin(BaseModel):
     email: EmailStr
