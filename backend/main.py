@@ -36,13 +36,13 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Get allowed origins from environment or use secure defaults (strip spaces)
-allowed_origins = [
-    o.strip() for o in os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173"
-    ).split(",") if o.strip()
-]
+# Get allowed origins from environment or use secure defaults
+# Normalize by trimming spaces and trailing slashes to match exact Origin header
+raw_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
+allowed_origins = [origin.strip().rstrip("/") for origin in raw_origins if origin.strip()]
 
 # CORS - Secure configuration
 app.add_middleware(
